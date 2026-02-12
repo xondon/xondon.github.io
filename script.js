@@ -6,7 +6,7 @@ try {
     background: rgba(0,0,0,0.6);
     padding:8px 10px; border-radius:8px;
     pointer-events:none;`;
-  status.textContent = "Loading script.js v12...";
+  status.textContent = "Loading script.js v13...";
   document.body.appendChild(status);
 
   import("three").then(async (THREE) => {
@@ -14,7 +14,7 @@ try {
     const { RenderPass } = await import("three/addons/postprocessing/RenderPass.js");
     const { UnrealBloomPass } = await import("three/addons/postprocessing/UnrealBloomPass.js");
 
-    status.textContent = "✅ script.js v12 loaded (Three OK)";
+    status.textContent = "✅ script.js v13 loaded (Three OK)";
 
     // ---------- Setup ----------
     const canvas = document.getElementById("c");
@@ -30,27 +30,22 @@ try {
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0x050605);
 
-    const camera = new THREE.PerspectiveCamera(
-      45,
-      window.innerWidth / window.innerHeight,
-      0.1,
-      260
-    );
+    const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 260);
     camera.position.set(0, 6, 32);
     camera.lookAt(0, 0, 0);
 
     scene.add(new THREE.AmbientLight(0xffffff, 0.25));
     scene.fog = new THREE.Fog(0x050605, 25, 120);
 
-    // ---------- Bloom (TUNED DOWN so glyphs stay readable) ----------
+    // ---------- Bloom ----------
     const composer = new EffectComposer(renderer);
     composer.addPass(new RenderPass(scene, camera));
 
     const bloomPass = new UnrealBloomPass(
       new THREE.Vector2(window.innerWidth, window.innerHeight),
-      0.85, // CHANGED: was strong (1.6). Lower = less blob.
-      0.35, // CHANGED: smaller spread
-      0.35  // CHANGED: higher threshold = only brightest parts glow
+      1.25, // will be overridden by scroll
+      0.55,
+      0.18  // will be overridden by scroll
     );
     composer.addPass(bloomPass);
 
@@ -79,6 +74,12 @@ try {
       return t > 0.62;
     }
 
+    // Smoothstep helper
+    function smoothstep(edge0, edge1, x) {
+      const t = Math.min(Math.max((x - edge0) / (edge1 - edge0), 0), 1);
+      return t * t * (3 - 2 * t);
+    }
+
     // ---------- Glyph set ----------
     const GLYPHS = [
       "0","1","2","3","4","5","6","7","8","9",
@@ -87,51 +88,38 @@ try {
       "ﾅ","ﾐ","ｻ","ﾗ","ﾄ","ﾘ","ﾇ","ﾍ"
     ];
 
-    // ---------- Texture builder (CRISP) ----------
+    // ---------- Texture builder (crisp + glow) ----------
     function makeGlyphTexture(ch) {
-      const size = 256; // CHANGED: higher res so shapes stay sharp
+      const size = 256;
       const cnv = document.createElement("canvas");
       cnv.width = size;
       cnv.height = size;
       const ctx = cnv.getContext("2d");
 
-      // Transparent background (IMPORTANT)
       ctx.clearRect(0, 0, size, size);
-
-      // 1) Soft glow pass (low alpha)
-      ctx.save();
-      ctx.translate(size / 2, size / 2);
-
-      ctx.font = "900 150px monospace";
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
 
-      ctx.shadowColor = "rgba(0,255,120,0.55)";
-      ctx.shadowBlur = 18;           // CHANGED: lower blur so it doesn’t become a blob
-      ctx.fillStyle = "rgba(0,255,120,0.22)";
+      // soft glow pass
+      ctx.save();
+      ctx.translate(size / 2, size / 2);
+      ctx.font = "900 150px monospace";
+      ctx.shadowColor = "rgba(0,255,120,0.65)";
+      ctx.shadowBlur = 22;
+      ctx.fillStyle = "rgba(0,255,120,0.28)";
       ctx.fillText(ch, 0, 8);
       ctx.restore();
 
-      // 2) Crisp foreground pass (NO shadow)
+      // crisp pass
       ctx.save();
       ctx.translate(size / 2, size / 2);
-
-      ctx.shadowColor = "rgba(0,0,0,0)";
       ctx.shadowBlur = 0;
-
       ctx.font = "900 150px monospace";
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-
-      // bright green core
-      ctx.fillStyle = "rgba(140,255,190,0.98)";
+      ctx.fillStyle = "rgba(165,255,205,0.98)";
       ctx.fillText(ch, 0, 8);
-
-      // subtle darker stroke for definition
       ctx.lineWidth = 3;
       ctx.strokeStyle = "rgba(0,120,55,0.55)";
       ctx.strokeText(ch, 0, 8);
-
       ctx.restore();
 
       const tex = new THREE.CanvasTexture(cnv);
@@ -147,15 +135,14 @@ try {
     // ---------- Instanced meshes ----------
     const COUNT = 1000;
 
-    // CHANGED: slightly larger planes so you can read symbols
-    const geo = new THREE.PlaneGeometry(1.35, 1.35);
+    // CHANGED: bigger planes for larger glyphs
+    const geo = new THREE.PlaneGeometry(1.75, 1.75);
 
-    // CHANGED: Normal blending keeps the character image intact
     const baseMat = {
       transparent: true,
       depthWrite: false,
       blending: THREE.NormalBlending,
-      opacity: 0.95,
+      opacity: 0.98,
     };
 
     const glyphMeshes = GLYPHS.map((_, i) => {
@@ -169,19 +156,19 @@ try {
     const dummy = new THREE.Object3D();
     const rand = (min, max) => min + Math.random() * (max - min);
 
-    // Spawn in front of camera (camera.z=32)
     const SPAWN = { x: 52, y: 72, zNear: 18, zFar: -95 };
 
+    // CHANGED: larger per-drop scale range
     const drops = Array.from({ length: COUNT }, () => ({
       x: rand(-SPAWN.x, SPAWN.x),
       y: rand(-SPAWN.y, SPAWN.y),
       z: rand(SPAWN.zFar, SPAWN.zNear),
-      s: 0.45 + Math.random() * 0.95,
+      s: 0.75 + Math.random() * 1.05,   // CHANGED (was ~0.45..1.4)
       sp: 0.6 + Math.random() * 2.2,
       glyph: Math.floor(Math.random() * GLYPHS.length),
     }));
 
-    // Initial placement so it never starts blank
+    // Initial placement
     for (let g = 0; g < glyphMeshes.length; g++) glyphMeshes[g].count = 0;
     const initCounts = new Array(GLYPHS.length).fill(0);
 
@@ -213,6 +200,15 @@ try {
       revealEl?.classList.toggle("show", revealFromScroll(scrollProgress));
       hintEl?.classList.toggle("hide", scrollProgress > 0.12);
 
+      // ---------- CHANGED: Scroll-driven glow tuning ----------
+      // At top (t=0): strong dreamy glow
+      // As you scroll: glow tightens so symbols remain readable
+      const t = scrollProgress;
+      const tighten = smoothstep(0.05, 0.55, t); // 0 -> 1 as you scroll
+      bloomPass.strength = THREE.MathUtils.lerp(1.75, 0.75, tighten);
+      bloomPass.radius   = THREE.MathUtils.lerp(0.75, 0.35, tighten);
+      bloomPass.threshold= THREE.MathUtils.lerp(0.08, 0.35, tighten);
+
       const counts = new Array(GLYPHS.length).fill(0);
 
       for (let i = 0; i < COUNT; i++) {
@@ -226,7 +222,7 @@ try {
           if (d.y > SPAWN.y) d.y = -SPAWN.y;
         }
 
-        // Flicker to a new symbol sometimes (movie vibe)
+        // Flicker to a new symbol sometimes
         if (Math.random() < 0.02) {
           d.glyph = Math.floor(Math.random() * GLYPHS.length);
         }
