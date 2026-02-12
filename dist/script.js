@@ -7,7 +7,7 @@ import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass.js";
 import { AfterimagePass } from "three/examples/jsm/postprocessing/AfterimagePass.js";
 
 /**
- * 3D Matrix Rain w/ Scroll Control + Real Motion Trails (AfterimagePass)
+ * 3D Matrix Rain w/ Scroll Control + Strong Motion Trails (AfterimagePass)
  * - start: rain falls fast
  * - scroll: slows to stop
  * - scroll more: reverses upward
@@ -41,8 +41,8 @@ const composer = new EffectComposer(renderer);
 composer.addPass(new RenderPass(scene, camera));
 
 const afterimagePass = new AfterimagePass();
-// Higher = longer trails; 0.85–0.93 is typical
-afterimagePass.uniforms.damp.value = 0.90;
+// Higher damp = longer/stronger trails
+afterimagePass.uniforms.damp.value = 0.975; // <-- CHANGED (was ~0.90)
 composer.addPass(afterimagePass);
 
 // ---------------- Digit textures (0 / 1) ----------------
@@ -96,7 +96,7 @@ const ones = new THREE.InstancedMesh(planeGeo, material1, countPerDigit);
 zeros.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
 ones.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
 
-// Per-instance tint variation (adds depth + pseudo-trail vibe)
+// Per-instance tint variation (adds depth)
 zeros.instanceColor = new THREE.InstancedBufferAttribute(
   new Float32Array(countPerDigit * 3),
   3
@@ -141,7 +141,6 @@ const drops1 = makeDrops(countPerDigit);
 const dummy = new THREE.Object3D();
 
 function setInstanceTint(mesh, i, a) {
-  // green channel dominates; vary slightly for depth
   const g = 0.85 + 0.15 * Math.random();
   mesh.instanceColor.setXYZ(i, 0.0, g * a, 0.0);
 }
@@ -203,21 +202,15 @@ function animate(now) {
   material0.opacity = globalOpacity;
   material1.opacity = globalOpacity;
 
-  // Trail length reacts to motion:
-  // When stopped, reduce trails to avoid heavy smearing on static frames.
-  const speedAbs = Math.min(Math.abs(scrollSpeed), 1.2);
-  afterimagePass.uniforms.damp.value = THREE.MathUtils.lerp(
-    0.96, // short trails (near stop)
-    0.86, // long trails (fast motion)
-    speedAbs / 1.2
-  );
+  // NOTE: Dynamic trail tuning removed on purpose (it made trails subtle). <-- CHANGED
 
   // Update instances
   for (let i = 0; i < countPerDigit; i++) {
     // Zeros
     {
       const d = drops0[i];
-      d.y -= dt * 10.0 * d.speed * scrollSpeed;
+      // CHANGED: 10.0 -> 22.0 to make trails more visible
+      d.y -= dt * 22.0 * d.speed * scrollSpeed;
 
       if (scrollSpeed >= 0) {
         if (d.y < bounds.yBottom) d.y = bounds.yTop + rand(0, 8);
@@ -237,7 +230,7 @@ function animate(now) {
     // Ones
     {
       const d = drops1[i];
-      d.y -= dt * 10.0 * d.speed * scrollSpeed;
+      d.y -= dt * 22.0 * d.speed * scrollSpeed;
 
       if (scrollSpeed >= 0) {
         if (d.y < bounds.yBottom) d.y = bounds.yTop + rand(0, 8);
@@ -260,27 +253,11 @@ function animate(now) {
   zeros.instanceColor.needsUpdate = true;
   ones.instanceColor.needsUpdate = true;
 
+  // IMPORTANT: render the composer (not renderer) so trails work
   composer.render();
   requestAnimationFrame(animate);
 }
 requestAnimationFrame(animate);
 
 // ---------------- Resize ----------------
-window.addEventListener("resize", () => {
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-  renderer.setSize(window.innerWidth, window.innerHeight, false);
-
-  composer.setSize(window.innerWidth, window.innerHeight);
-
-  camera.aspect = window.innerWidth / window.innerHeight;
-  camera.updateProjectionMatrix();
-});
-
-// ---------------- Reduced motion ----------------
-const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)");
-if (reduce?.matches) {
-  revealEl?.classList.add("show");
-  hintEl?.classList.add("hide");
-  // Short trails so it doesn't smear on static frames
-  afterimagePass.uniforms.damp.value = 0.98;
-}
+window.addEventListener("resiz
