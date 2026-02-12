@@ -5,12 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Xondon</title>
 
-  <!-- Cache hints (browser-side only) -->
-  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
-  <meta http-equiv="Pragma" content="no-cache" />
-  <meta http-equiv="Expires" content="0" />
-
-  <link rel="stylesheet" href="styles.css?v=11" />
+  <link rel="stylesheet" href="styles.css?v=13" />
 
   <!-- Import map so Three works on plain GitHub Pages -->
   <script type="importmap">
@@ -25,21 +20,6 @@
 
 <body>
   <canvas id="c"></canvas>
-
-  <!-- DEBUG: If you see this, index.html is definitely updating -->
-  <div id="debugBanner" style="
-    position:fixed; top:10px; left:10px; z-index:9999;
-    font: 12px/1.2 monospace; color:#fff;
-    background: rgba(255,0,0,0.75);
-    padding:8px 10px; border-radius:8px;
-    pointer-events:none;">
-    DEBUG: index.html v11 loaded
-  </div>
-
-  <!-- DEBUG: runs even if module script fails -->
-  <script>
-    console.log("✅ index.html v11 inline script ran");
-  </script>
 
   <div class="overlay">
     <div class="topbar">
@@ -67,7 +47,6 @@
 
   <div class="scrollSpacer"></div>
 
-  <!-- Force fresh script load -->
   <script type="module" src="./script.js?v=13"></script>
 </body>
 </html>
