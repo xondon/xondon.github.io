@@ -1,5 +1,5 @@
 try {
-  // Green status box (auto-hides)
+  // Green status (auto-hide)
   const status = document.createElement("div");
   status.style.cssText = `
     position:fixed; top:12px; left:12px; z-index:9999;
@@ -8,12 +8,12 @@ try {
     padding:8px 10px; border-radius:8px;
     pointer-events:none;
     transition: opacity 0.6s ease;`;
-  status.textContent = "Loading script.js v14...";
+  status.textContent = "Loading script.js v15...";
   document.body.appendChild(status);
   setTimeout(() => {
     status.style.opacity = "0";
     setTimeout(() => status.remove(), 700);
-  }, 1600);
+  }, 1400);
 
   import("three").then(async (THREE) => {
     const { EffectComposer } = await import("three/addons/postprocessing/EffectComposer.js");
@@ -34,12 +34,12 @@ try {
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0x000000);
 
-    const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 260);
+    const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 280);
     camera.position.set(0, 6, 32);
     camera.lookAt(0, 0, 0);
 
-    scene.add(new THREE.AmbientLight(0xffffff, 0.25));
-    scene.fog = new THREE.Fog(0x000000, 25, 120);
+    scene.add(new THREE.AmbientLight(0xffffff, 0.22));
+    scene.fog = new THREE.Fog(0x000000, 25, 130);
 
     // ---------- Bloom ----------
     const composer = new EffectComposer(renderer);
@@ -69,7 +69,6 @@ try {
     function speedFromScroll(t) {
       const stopPoint = 0.35;
       const flipPoint = 0.55;
-
       if (t < stopPoint) return THREE.MathUtils.lerp(1.0, 0.10, t / stopPoint);
       if (t < flipPoint) return THREE.MathUtils.lerp(0.10, 0.0, (t - stopPoint) / (flipPoint - stopPoint));
       return THREE.MathUtils.lerp(0.0, -1.25, (t - flipPoint) / (1.0 - flipPoint));
@@ -82,15 +81,15 @@ try {
       return t * t * (3 - 2 * t);
     }
 
-    // ---------- End “energy rush” + blackout state ----------
-    const BURST_POINT = 0.86;     // near the end of the scroll
-    const BURST_DURATION = 2.2;   // seconds
-    const RESET_POINT = 0.72;     // scroll back up past here to “restore” the scene
+    // ---------- Trigger points ----------
+    // "fly up" point: when reversing starts, we trigger the STREAM BURST immediately.
+    const FLIP_POINT = 0.55;
 
-    let burstActive = false;
-    let burstDone = false;
-    let burstStart = 0;
-    let blank = false;
+    // how long the stream burst runs before blackout
+    const STREAM_BURST_DURATION = 2.0;
+
+    // scroll back up past this to reset to normal
+    const RESET_POINT = 0.42;
 
     // ---------- Glyph set ----------
     const GLYPHS = [
@@ -116,7 +115,7 @@ try {
       ctx.save();
       ctx.translate(size / 2, size / 2);
       ctx.font = "900 150px monospace";
-      ctx.shadowColor = "rgba(0,255,120,0.7)";
+      ctx.shadowColor = "rgba(0,255,120,0.75)";
       ctx.shadowBlur = 26;
       ctx.fillStyle = "rgba(0,255,120,0.30)";
       ctx.fillText(ch, 0, 8);
@@ -141,15 +140,9 @@ try {
       if ("colorSpace" in tex) tex.colorSpace = THREE.SRGBColorSpace;
       return tex;
     }
-
     const glyphTextures = GLYPHS.map(makeGlyphTexture);
 
-    // ---------- Instanced meshes ----------
-    const COUNT = 1100;
-
-    // CHANGED: symbols slightly larger
-    const geo = new THREE.PlaneGeometry(2.10, 2.10);
-
+    // ---------- Shared geometry/material base ----------
     const baseMat = {
       transparent: true,
       depthWrite: false,
@@ -157,185 +150,266 @@ try {
       opacity: 0.98,
     };
 
-    const glyphMeshes = GLYPHS.map((_, i) => {
-      const mat = new THREE.MeshBasicMaterial({ ...baseMat, map: glyphTextures[i] });
-      const mesh = new THREE.InstancedMesh(geo, mat, COUNT);
-      mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-      scene.add(mesh);
-      return mesh;
-    });
+    // Larger symbols
+    const glyphGeo = new THREE.PlaneGeometry(2.15, 2.15);
 
     const dummy = new THREE.Object3D();
     const rand = (min, max) => min + Math.random() * (max - min);
 
-    const SPAWN = { x: 54, y: 75, zNear: 18, zFar: -100 };
+    const SPAWN = { x: 54, y: 75, zNear: 18, zFar: -105 };
 
-    // CHANGED: slightly larger scale range
-    const drops = Array.from({ length: COUNT }, () => ({
+    // ============================================================
+    // MODE A: "Rain particles" (your current look)
+    // ============================================================
+    const RAIN_COUNT = 1100;
+
+    const rainMeshes = GLYPHS.map((_, i) => {
+      const mat = new THREE.MeshBasicMaterial({ ...baseMat, map: glyphTextures[i] });
+      const mesh = new THREE.InstancedMesh(glyphGeo, mat, RAIN_COUNT);
+      mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+      mesh.visible = true;
+      scene.add(mesh);
+      return mesh;
+    });
+
+    const rainDrops = Array.from({ length: RAIN_COUNT }, () => ({
       x: rand(-SPAWN.x, SPAWN.x),
       y: rand(-SPAWN.y, SPAWN.y),
       z: rand(SPAWN.zFar, SPAWN.zNear),
-      s: 0.90 + Math.random() * 1.15,
+      s: 0.95 + Math.random() * 1.20,
       sp: 0.6 + Math.random() * 2.2,
       glyph: Math.floor(Math.random() * GLYPHS.length),
     }));
 
-    // Helper: clear all glyphs (black blank scene)
-    function clearGlyphs() {
-      for (let g = 0; g < glyphMeshes.length; g++) {
-        glyphMeshes[g].count = 0;
-        glyphMeshes[g].instanceMatrix.needsUpdate = true;
-      }
-    }
-
-    // Initial placement (non-blank)
-    function initialPlace() {
-      for (let g = 0; g < glyphMeshes.length; g++) glyphMeshes[g].count = 0;
+    function placeRainOnce() {
+      for (let g = 0; g < rainMeshes.length; g++) rainMeshes[g].count = 0;
       const counts = new Array(GLYPHS.length).fill(0);
 
-      for (let i = 0; i < COUNT; i++) {
-        const d = drops[i];
+      for (let i = 0; i < RAIN_COUNT; i++) {
+        const d = rainDrops[i];
         const gi = d.glyph;
         const idx = counts[gi]++;
-        if (idx >= COUNT) continue;
+        if (idx >= RAIN_COUNT) continue;
 
         dummy.position.set(d.x, d.y, d.z);
         dummy.scale.setScalar(d.s);
         dummy.updateMatrix();
-        glyphMeshes[gi].setMatrixAt(idx, dummy.matrix);
+        rainMeshes[gi].setMatrixAt(idx, dummy.matrix);
       }
-      for (let g = 0; g < glyphMeshes.length; g++) {
-        glyphMeshes[g].count = counts[g];
-        glyphMeshes[g].instanceMatrix.needsUpdate = true;
+      for (let g = 0; g < rainMeshes.length; g++) {
+        rainMeshes[g].count = counts[g];
+        rainMeshes[g].instanceMatrix.needsUpdate = true;
       }
     }
-    initialPlace();
+    placeRainOnce();
+
+    // ============================================================
+    // MODE B: "Stream burst erase" (columns of glyphs)
+    // ============================================================
+    const STREAM_COLUMNS = 120;   // number of columns
+    const STREAM_SEGMENTS = 22;   // glyphs per column (tail length)
+    const STREAM_COUNT = STREAM_COLUMNS * STREAM_SEGMENTS; // instances per glyph mesh
+
+    const streamMeshes = GLYPHS.map((_, i) => {
+      // during burst we want intensity, so use additive blending
+      const mat = new THREE.MeshBasicMaterial({
+        ...baseMat,
+        map: glyphTextures[i],
+        blending: THREE.AdditiveBlending,
+        opacity: 1.0
+      });
+      const mesh = new THREE.InstancedMesh(glyphGeo, mat, STREAM_COUNT);
+      mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+      mesh.visible = false; // start hidden
+      scene.add(mesh);
+      return mesh;
+    });
+
+    // stream column state: x,z position, headY, speed, scale
+    const streams = Array.from({ length: STREAM_COLUMNS }, () => ({
+      x: rand(-SPAWN.x * 0.95, SPAWN.x * 0.95),
+      z: rand(SPAWN.zFar, SPAWN.zNear),
+      headY: rand(-SPAWN.y, SPAWN.y),
+      speed: rand(0.9, 1.8),
+      scale: rand(0.85, 1.25),
+      phase: Math.random() * 1000,
+    }));
+
+    // segment spacing
+    const STREAM_SPACING = 1.05;
+
+    // ============================================================
+    // State machine
+    // ============================================================
+    let mode = "RAIN";      // "RAIN" | "STREAM" | "BLACK"
+    let streamStart = 0;
+
+    function setMode(next) {
+      mode = next;
+      const rainVisible = next === "RAIN";
+      const streamVisible = next === "STREAM";
+
+      for (const m of rainMeshes) m.visible = rainVisible;
+      for (const m of streamMeshes) m.visible = streamVisible;
+
+      if (next === "BLACK") {
+        for (const m of rainMeshes) m.count = 0;
+        for (const m of streamMeshes) m.count = 0;
+        for (const m of rainMeshes) m.instanceMatrix.needsUpdate = true;
+        for (const m of streamMeshes) m.instanceMatrix.needsUpdate = true;
+      }
+    }
+
+    // start in rain
+    setMode("RAIN");
 
     // ---------- Animation ----------
     let last = performance.now();
+    let prevScroll = scrollProgress;
 
     function animate(now) {
       const dt = Math.min((now - last) / 1000, 0.033);
       last = now;
 
-      // Reset behavior when user scrolls back up
-      if (scrollProgress < RESET_POINT && (blank || burstDone || burstActive)) {
-        burstActive = false;
-        burstDone = false;
-        blank = false;
-        // restore normal blending (in case burst changed it)
-        for (const m of glyphMeshes) m.material.blending = THREE.NormalBlending;
-        initialPlace();
+      // Reset if user scrolls back up enough
+      if (scrollProgress < RESET_POINT && mode !== "RAIN") {
+        setMode("RAIN");
+        placeRainOnce();
       }
 
-      // Trigger burst near end of scroll
-      if (!burstActive && !burstDone && scrollProgress >= BURST_POINT) {
-        burstActive = true;
-        burstStart = now;
+      // Detect crossing into “reverse” (flip) and trigger stream burst immediately
+      const crossedFlip = prevScroll < FLIP_POINT && scrollProgress >= FLIP_POINT;
+      prevScroll = scrollProgress;
+
+      if (mode === "RAIN" && crossedFlip) {
+        setMode("STREAM");
+        streamStart = now;
       }
 
-      // If blank, keep screen black
-      if (blank) {
+      // UI behavior
+      if (mode === "RAIN") {
+        revealEl?.classList.toggle("show", revealFromScroll(scrollProgress));
+        hintEl?.classList.toggle("hide", scrollProgress > 0.12);
+      } else {
+        // during stream + black, hide UI to feel like reset/erase
         revealEl?.classList.remove("show");
         hintEl?.classList.add("hide");
-        clearGlyphs();
-        // subtle fade to pure black
-        bloomPass.strength = 0.0;
-        composer.render();
-        requestAnimationFrame(animate);
-        return;
       }
 
-      // Determine speed + glow from scroll / burst state
-      let spd = speedFromScroll(scrollProgress);
-
-      // Stronger glow scaling (CHANGED)
-      // At top: very strong glow. Tightens as you scroll down.
+      // Scroll-driven glow (stronger overall)
       const tighten = smoothstep(0.05, 0.65, scrollProgress);
       let strength = THREE.MathUtils.lerp(2.35, 0.95, tighten);
       let radius = THREE.MathUtils.lerp(0.85, 0.40, tighten);
       let threshold = THREE.MathUtils.lerp(0.06, 0.33, tighten);
 
-      // Burst overrides (energy rush)
-      if (burstActive) {
-        const elapsed = (now - burstStart) / 1000;
-        if (elapsed < BURST_DURATION) {
-          // CHANGED: super fast upward rush
-          spd = -9.0;
-
-          // CHANGED: maximum bloom for “solid blur line”
-          strength = 3.2;
-          radius = 1.05;
-          threshold = 0.02;
-
-          // CHANGED: additive blending during burst makes the streak intense
-          for (const m of glyphMeshes) m.material.blending = THREE.AdditiveBlending;
-
-        } else {
-          // End burst -> blackout
-          burstActive = false;
-          burstDone = true;
-          blank = true;
-          clearGlyphs();
-          revealEl?.classList.remove("show");
-          hintEl?.classList.add("hide");
-          composer.render();
-          requestAnimationFrame(animate);
-          return;
-        }
-      } else {
-        // Ensure normal blending when not bursting
-        for (const m of glyphMeshes) m.material.blending = THREE.NormalBlending;
+      // Mode overrides
+      if (mode === "STREAM") {
+        // Max glow for “erase wall”
+        strength = 3.0;
+        radius = 1.0;
+        threshold = 0.02;
+      }
+      if (mode === "BLACK") {
+        strength = 0.0;
+        radius = 0.0;
+        threshold = 1.0;
       }
 
       bloomPass.strength = strength;
       bloomPass.radius = radius;
       bloomPass.threshold = threshold;
 
-      // UI behavior:
-      // - show name during “reveal zone”
-      // - hide hint after small scroll or during burst
-      const showReveal = revealFromScroll(scrollProgress) && !burstActive;
-      revealEl?.classList.toggle("show", showReveal);
-      hintEl?.classList.toggle("hide", scrollProgress > 0.12 || burstActive);
+      // Update modes
+      if (mode === "RAIN") {
+        const spd = speedFromScroll(scrollProgress);
+        const counts = new Array(GLYPHS.length).fill(0);
 
-      // Build instances each frame
-      const counts = new Array(GLYPHS.length).fill(0);
+        for (let i = 0; i < RAIN_COUNT; i++) {
+          const d = rainDrops[i];
 
-      // During burst we want “more blur”, so we slightly increase flicker rate
-      const flickerChance = burstActive ? 0.12 : 0.02;
+          d.y -= dt * 18 * d.sp * spd;
 
-      for (let i = 0; i < COUNT; i++) {
-        const d = drops[i];
+          if (spd >= 0) {
+            if (d.y < -SPAWN.y) d.y = SPAWN.y;
+          } else {
+            if (d.y > SPAWN.y) d.y = -SPAWN.y;
+          }
 
-        // motion (down or up depending on spd sign)
-        d.y -= dt * 18 * d.sp * spd;
+          if (Math.random() < 0.02) d.glyph = Math.floor(Math.random() * GLYPHS.length);
 
-        // wrap
-        if (spd >= 0) {
-          if (d.y < -SPAWN.y) d.y = SPAWN.y;
-        } else {
-          if (d.y > SPAWN.y) d.y = -SPAWN.y;
+          const gi = d.glyph;
+          const idx = counts[gi]++;
+          if (idx >= RAIN_COUNT) continue;
+
+          dummy.position.set(d.x, d.y, d.z);
+          dummy.scale.setScalar(d.s);
+          dummy.updateMatrix();
+          rainMeshes[gi].setMatrixAt(idx, dummy.matrix);
         }
 
-        // flicker symbols
-        if (Math.random() < flickerChance) {
-          d.glyph = Math.floor(Math.random() * GLYPHS.length);
+        for (let g = 0; g < rainMeshes.length; g++) {
+          rainMeshes[g].count = counts[g];
+          rainMeshes[g].instanceMatrix.needsUpdate = true;
         }
-
-        const gi = d.glyph;
-        const idx = counts[gi]++;
-        if (idx >= COUNT) continue;
-
-        dummy.position.set(d.x, d.y, d.z);
-        dummy.scale.setScalar(d.s);
-        dummy.updateMatrix();
-        glyphMeshes[gi].setMatrixAt(idx, dummy.matrix);
       }
 
-      for (let g = 0; g < glyphMeshes.length; g++) {
-        glyphMeshes[g].count = counts[g];
-        glyphMeshes[g].instanceMatrix.needsUpdate = true;
+      if (mode === "STREAM") {
+        const elapsed = (now - streamStart) / 1000;
+        if (elapsed > STREAM_BURST_DURATION) {
+          setMode("BLACK");
+        } else {
+          // Upward speed for the erase wall (fast)
+          const streamSpeed = -10.0;
+
+          // Move stream heads
+          for (let s = 0; s < STREAM_COLUMNS; s++) {
+            const st = streams[s];
+            st.headY -= dt * 18 * st.speed * streamSpeed;
+
+            // wrap quickly
+            if (st.headY > SPAWN.y + STREAM_SEGMENTS * STREAM_SPACING) {
+              st.headY = -SPAWN.y - Math.random() * 12;
+            }
+          }
+
+          // Fill instances per glyph
+          const counts = new Array(GLYPHS.length).fill(0);
+
+          // more flicker during burst
+          const flickerChance = 0.18;
+
+          for (let s = 0; s < STREAM_COLUMNS; s++) {
+            const st = streams[s];
+
+            for (let seg = 0; seg < STREAM_SEGMENTS; seg++) {
+              const y = st.headY - seg * STREAM_SPACING;
+              if (y < -SPAWN.y - 10 || y > SPAWN.y + 10) continue;
+
+              // flicker character choice
+              let gi = Math.floor((st.phase + seg * 13.37 + elapsed * 90) % GLYPHS.length);
+              if (Math.random() < flickerChance) gi = Math.floor(Math.random() * GLYPHS.length);
+
+              const idx = counts[gi]++;
+              if (idx >= STREAM_COUNT) continue;
+
+              dummy.position.set(st.x, y, st.z);
+              dummy.scale.setScalar(st.scale);
+              dummy.updateMatrix();
+              streamMeshes[gi].setMatrixAt(idx, dummy.matrix);
+            }
+          }
+
+          for (let g = 0; g < streamMeshes.length; g++) {
+            streamMeshes[g].count = counts[g];
+            streamMeshes[g].instanceMatrix.needsUpdate = true;
+          }
+        }
+      }
+
+      if (mode === "BLACK") {
+        // Keep it blank/black until reset point reached (handled above)
+        for (const m of rainMeshes) m.count = 0;
+        for (const m of streamMeshes) m.count = 0;
       }
 
       composer.render();
