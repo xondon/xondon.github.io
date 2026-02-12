@@ -21,36 +21,6 @@ html, body { height:100%; margin:0; background: var(--bg); color:#fff; font-fami
   z-index: 10;
 }
 
-.topbar{
-  pointer-events: auto;
-  position: absolute;
-  top: 18px;
-  left: 18px;
-  right: 18px;
-  display:flex;
-  align-items:center;
-  justify-content: space-between;
-}
-
-.brand{
-  width: 44px;
-  height: 44px;
-  border: 1px solid rgba(255,255,255,0.2);
-  border-radius: 12px;
-  display:grid;
-  place-items:center;
-  font-weight: 800;
-}
-
-.nav a{
-  pointer-events:auto;
-  color: rgba(255,255,255,0.85);
-  text-decoration:none;
-  margin-left: 16px;
-  font-size: 14px;
-}
-.nav a:hover{ color:#fff; }
-
 .center{
   position:absolute;
   inset:0;
