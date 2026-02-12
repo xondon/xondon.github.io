@@ -8,7 +8,7 @@ try {
     padding:8px 10px; border-radius:8px;
     pointer-events:none;
     transition: opacity 0.6s ease;`;
-  status.textContent = "Loading script.js v17...";
+  status.textContent = "Loading script.js v18...";
   document.body.appendChild(status);
   setTimeout(() => {
     status.style.opacity = "0";
@@ -61,20 +61,22 @@ try {
     // Physical scroll (0..1)
     let scrollProgress = 0;
 
-    // CHANGED: Virtual mapping makes the page *feel longer* (less sensitive wheel)
-    // Larger value = more physical scroll needed to reach the same animation progress.
+    // Larger = more “middle distance” before things change
     const SCROLL_STRETCH = 1.85;
 
-    // This is the progress the animation actually uses (0..1)
+    // Virtual progress used by the animation (0..1) — now GUARANTEED to reach 1.0 at bottom
     let tProg = 0;
 
     function updateScrollProgress() {
       const maxScroll = document.documentElement.scrollHeight - window.innerHeight;
       scrollProgress = maxScroll <= 0 ? 0 : Math.min(Math.max(window.scrollY / maxScroll, 0), 1);
 
-      // CHANGED: map physical scroll -> slower virtual progress
-      // Example: with 1.85, you reach virtual 1.0 only near the *very* bottom.
-      tProg = Math.min(scrollProgress / SCROLL_STRETCH, 1);
+      // CHANGED: non-linear mapping that feels longer but still reaches 1 at bottom:
+      // - For most of the scroll, progress is slowed by SCROLL_STRETCH
+      // - The last part “catches up” smoothly so activation always happens
+      const slow = Math.min(scrollProgress * (1 / SCROLL_STRETCH), 0.90); // slow region capped
+      const catchUp = Math.max(0, scrollProgress - 0.90) / 0.10;          // last 10% of physical scroll
+      tProg = Math.min(slow + catchUp * 0.10, 1);                         // add final 10% to reach 1
     }
     window.addEventListener("scroll", updateScrollProgress, { passive: true });
     updateScrollProgress();
@@ -84,42 +86,31 @@ try {
       return t * t * (3 - 2 * t);
     }
 
-    // CHANGED: New curve = slower longer before reverse
+    // Slow longer before reverse
     function speedFromScroll(t) {
-      // These operate on VIRTUAL progress (tProg)
-      const slowStart = 0.22;  // start slowing earlier
-      const stopPoint = 0.58;  // reach near-stop later
-      const flipPoint = 0.74;  // reverse much later (more slow time)
+      const slowStart = 0.22;
+      const stopPoint = 0.58;
+      const flipPoint = 0.74;
 
       if (t < slowStart) return 1.0;
 
-      // ease down from 1 -> 0.05 (very slow)
       if (t < stopPoint) {
         const k = smoothstep(slowStart, stopPoint, t);
         return THREE.MathUtils.lerp(1.0, 0.05, k);
       }
 
-      // linger near-zero before reverse
       if (t < flipPoint) {
         const k = smoothstep(stopPoint, flipPoint, t);
         return THREE.MathUtils.lerp(0.05, 0.0, k);
       }
 
-      // after flip, go negative (upwards) gradually (but burst will override near end)
       return THREE.MathUtils.lerp(0.0, -1.25, smoothstep(flipPoint, 1.0, t));
     }
 
-    function revealFromScroll(t) {
-      // CHANGED: name should be AFTER burst; we’ll control reveal directly in code.
-      // Keeping this for compatibility, but not used for showing name during rain.
-      return t > 0.62;
-    }
-
     // ---------- End “energy rush” + blackout state ----------
-    // CHANGED: Burst points now use VIRTUAL progress (tProg)
-    const BURST_POINT = 0.92;     // near the end of the virtual scroll
-    const BURST_DURATION = 2.2;   // seconds
-    const RESET_POINT = 0.45;     // scroll back up past here (virtual) to restore
+    const BURST_POINT = 0.92;     // uses virtual tProg, guaranteed reachable now
+    const BURST_DURATION = 2.2;
+    const RESET_POINT = 0.45;
 
     let burstActive = false;
     let burstDone = false;
@@ -134,7 +125,6 @@ try {
       "ﾅ","ﾐ","ｻ","ﾗ","ﾄ","ﾘ","ﾇ","ﾍ"
     ];
 
-    // ---------- Texture builder ----------
     function makeGlyphTexture(ch) {
       const size = 256;
       const cnv = document.createElement("canvas");
@@ -146,7 +136,6 @@ try {
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
 
-      // glow pass
       ctx.save();
       ctx.translate(size / 2, size / 2);
       ctx.font = "900 150px monospace";
@@ -156,7 +145,6 @@ try {
       ctx.fillText(ch, 0, 8);
       ctx.restore();
 
-      // crisp core
       ctx.save();
       ctx.translate(size / 2, size / 2);
       ctx.shadowBlur = 0;
@@ -178,9 +166,7 @@ try {
 
     const glyphTextures = GLYPHS.map(makeGlyphTexture);
 
-    // ---------- Instanced meshes ----------
     const COUNT = 1100;
-
     const geo = new THREE.PlaneGeometry(2.10, 2.10);
 
     const baseMat = {
@@ -200,7 +186,6 @@ try {
 
     const dummy = new THREE.Object3D();
     const rand = (min, max) => min + Math.random() * (max - min);
-
     const SPAWN = { x: 54, y: 75, zNear: 18, zFar: -100 };
 
     const drops = Array.from({ length: COUNT }, () => ({
@@ -241,14 +226,13 @@ try {
     }
     initialPlace();
 
-    // ---------- Animation ----------
     let last = performance.now();
 
     function animate(now) {
       const dt = Math.min((now - last) / 1000, 0.033);
       last = now;
 
-      // Reset behavior when user scrolls back up (use virtual progress)
+      // Reset when user scrolls back up (virtual progress)
       if (tProg < RESET_POINT && (blank || burstDone || burstActive)) {
         burstActive = false;
         burstDone = false;
@@ -257,18 +241,16 @@ try {
         initialPlace();
       }
 
-      // Trigger burst near end of VIRTUAL scroll
+      // Trigger burst near end (virtual progress)
       if (!burstActive && !burstDone && tProg >= BURST_POINT) {
         burstActive = true;
         burstStart = now;
       }
 
-      // If blank, keep screen black + SHOW NAME AFTER BURST
+      // Blank: black screen + name visible
       if (blank) {
-        // CHANGED: show name after rush
         revealEl?.classList.add("show");
         hintEl?.classList.add("hide");
-
         clearGlyphs();
         bloomPass.strength = 0.0;
         composer.render();
@@ -276,10 +258,9 @@ try {
         return;
       }
 
-      // During normal rain: hide name (so it appears only after rush)
+      // During normal rain: hide name
       revealEl?.classList.remove("show");
 
-      // Determine speed + glow from scroll / burst state
       let spd = speedFromScroll(tProg);
 
       const tighten = smoothstep(0.05, 0.75, tProg);
@@ -290,24 +271,18 @@ try {
       if (burstActive) {
         const elapsed = (now - burstStart) / 1000;
         if (elapsed < BURST_DURATION) {
-          // super fast upward rush
           spd = -9.0;
-
-          // maximum bloom for “solid blur line”
           strength = 3.2;
           radius = 1.05;
           threshold = 0.02;
-
           for (const m of glyphMeshes) m.material.blending = THREE.AdditiveBlending;
         } else {
-          // End burst -> blackout
           burstActive = false;
           burstDone = true;
           blank = true;
-
           clearGlyphs();
 
-          // CHANGED: show name after rush, not before
+          // Show name after rush
           revealEl?.classList.add("show");
           hintEl?.classList.add("hide");
 
@@ -323,7 +298,6 @@ try {
       bloomPass.radius = radius;
       bloomPass.threshold = threshold;
 
-      // Hint: still show early, hide later / during burst
       hintEl?.classList.toggle("hide", tProg > 0.10 || burstActive);
 
       const counts = new Array(GLYPHS.length).fill(0);
@@ -334,16 +308,13 @@ try {
 
         d.y -= dt * 18 * d.sp * spd;
 
-        // wrap
         if (spd >= 0) {
           if (d.y < -SPAWN.y) d.y = SPAWN.y;
         } else {
           if (d.y > SPAWN.y) d.y = -SPAWN.y;
         }
 
-        if (Math.random() < flickerChance) {
-          d.glyph = Math.floor(Math.random() * GLYPHS.length);
-        }
+        if (Math.random() < flickerChance) d.glyph = Math.floor(Math.random() * GLYPHS.length);
 
         const gi = d.glyph;
         const idx = counts[gi]++;
@@ -366,7 +337,6 @@ try {
 
     requestAnimationFrame(animate);
 
-    // ---------- Resize ----------
     window.addEventListener("resize", () => {
       renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
       renderer.setSize(window.innerWidth, window.innerHeight, false);
