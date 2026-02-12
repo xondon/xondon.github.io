@@ -108,7 +108,7 @@ try {
     }
 
     // ---------- End “energy rush” + blackout state ----------
-    const BURST_POINT = 0.92;     // uses virtual tProg, guaranteed reachable now
+    const BURST_POINT = 0.85;     // uses virtual tProg, guaranteed reachable now
     const BURST_DURATION = 2.2;
     const RESET_POINT = 0.45;
 
