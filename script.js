@@ -1,5 +1,5 @@
 try {
-  // Green status (auto-hide)
+  // Green status box (auto-hides)
   const status = document.createElement("div");
   status.style.cssText = `
     position:fixed; top:12px; left:12px; z-index:9999;
@@ -8,12 +8,12 @@ try {
     padding:8px 10px; border-radius:8px;
     pointer-events:none;
     transition: opacity 0.6s ease;`;
-  status.textContent = "Loading script.js v20...";
+  status.textContent = "Loading script.js v21...";
   document.body.appendChild(status);
   setTimeout(() => {
     status.style.opacity = "0";
     setTimeout(() => status.remove(), 700);
-  }, 1400);
+  }, 1600);
 
   import("three").then(async (THREE) => {
     const { EffectComposer } = await import("three/addons/postprocessing/EffectComposer.js");
@@ -34,14 +34,14 @@ try {
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0x000000);
 
-    const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 280);
+    const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 260);
     camera.position.set(0, 6, 32);
     camera.lookAt(0, 0, 0);
 
-    scene.add(new THREE.AmbientLight(0xffffff, 0.22));
-    scene.fog = new THREE.Fog(0x000000, 25, 130);
+    scene.add(new THREE.AmbientLight(0xffffff, 0.25));
+    scene.fog = new THREE.Fog(0x000000, 25, 120);
 
-    // ---------- Post ----------
+    // ---------- Bloom ----------
     const composer = new EffectComposer(renderer);
     composer.addPass(new RenderPass(scene, camera));
 
@@ -57,46 +57,57 @@ try {
     const revealEl = document.getElementById("reveal");
     const hintEl = document.getElementById("hint");
 
-    // ---------- Scroll ----------
-    let scrollProgress = 0; // 0..1
-    function updateScroll() {
+    // ---------- Scroll control ----------
+    let scrollProgress = 0; // physical 0..1
+    let tProg = 0;          // virtual 0..1 (slower early but ALWAYS reaches 1 at bottom)
+
+    // Larger gamma => “longer page feel”
+    const GAMMA = 1.65;
+
+    function updateScrollProgress() {
       const maxScroll = document.documentElement.scrollHeight - window.innerHeight;
       scrollProgress = maxScroll <= 0 ? 0 : Math.min(Math.max(window.scrollY / maxScroll, 0), 1);
+      tProg = Math.pow(scrollProgress, GAMMA);
     }
-    window.addEventListener("scroll", updateScroll, { passive: true });
-    updateScroll();
+    window.addEventListener("scroll", updateScrollProgress, { passive: true });
+    updateScrollProgress();
 
     function smoothstep(edge0, edge1, x) {
       const t = Math.min(Math.max((x - edge0) / (edge1 - edge0), 0), 1);
       return t * t * (3 - 2 * t);
     }
 
-    // ---------- Speed curve (slows longer before reverse) ----------
+    // ---------- Speed curve ----------
+    // Slows down longer, then reverses upward.
     function speedFromScroll(t) {
       const slowStart = 0.22;
-      const stopPoint = 0.62;  // later = more time slowing
-      const flipPoint = 0.78;  // later = more time near 0 before reverse
+      const stopPoint = 0.62; // gets very slow later
+      const flipPoint = 0.78; // reverse later
 
       if (t < slowStart) return 1.0;
 
       if (t < stopPoint) {
         const k = smoothstep(slowStart, stopPoint, t);
-        return THREE.MathUtils.lerp(1.0, 0.08, k);
+        return THREE.MathUtils.lerp(1.0, 0.06, k);
       }
 
       if (t < flipPoint) {
         const k = smoothstep(stopPoint, flipPoint, t);
-        return THREE.MathUtils.lerp(0.08, 0.0, k);
+        return THREE.MathUtils.lerp(0.06, 0.0, k);
       }
 
       return THREE.MathUtils.lerp(0.0, -1.25, smoothstep(flipPoint, 1.0, t));
     }
 
-    // ---------- Trigger points ----------
-    const FLIP_POINT = 0.78;              // start wipe around here
-    const BOTTOM_FAILSAFE = 0.995;        // CHANGED: guaranteed trigger at bottom
-    const STREAM_BURST_DURATION = 2.0;
-    const RESET_POINT = 0.42;
+    // ---------- Rush trigger ----------
+    // This is NOT a wipe/blank — it just temporarily boosts upward speed + bloom.
+    const RUSH_POINT = 0.92;             // virtual progress
+    const RUSH_DURATION = 2.2;           // seconds
+    const BOTTOM_RUSH_FAILSAFE = 0.995;  // physical progress fail-safe
+
+    let rushActive = false;
+    let rushDone = false;
+    let rushStart = 0;
 
     // ---------- Glyph set ----------
     const GLYPHS = [
@@ -122,13 +133,13 @@ try {
       ctx.save();
       ctx.translate(size / 2, size / 2);
       ctx.font = "900 150px monospace";
-      ctx.shadowColor = "rgba(0,255,120,0.75)";
+      ctx.shadowColor = "rgba(0,255,120,0.7)";
       ctx.shadowBlur = 26;
       ctx.fillStyle = "rgba(0,255,120,0.30)";
       ctx.fillText(ch, 0, 8);
       ctx.restore();
 
-      // crisp pass
+      // crisp core
       ctx.save();
       ctx.translate(size / 2, size / 2);
       ctx.shadowBlur = 0;
@@ -147,36 +158,33 @@ try {
       if ("colorSpace" in tex) tex.colorSpace = THREE.SRGBColorSpace;
       return tex;
     }
+
     const glyphTextures = GLYPHS.map(makeGlyphTexture);
 
-    // ---------- Shared ----------
+    // ---------- Instanced meshes ----------
+    const COUNT = 1100;
+    const geo = new THREE.PlaneGeometry(2.10, 2.10);
+
     const baseMat = {
       transparent: true,
       depthWrite: false,
       blending: THREE.NormalBlending,
       opacity: 0.98,
     };
-    const geo = new THREE.PlaneGeometry(2.10, 2.10);
 
-    const dummy = new THREE.Object3D();
-    const rand = (min, max) => min + Math.random() * (max - min);
-    const SPAWN = { x: 54, y: 75, zNear: 18, zFar: -105 };
-
-    // ============================================================
-    // MODE A: Rain
-    // ============================================================
-    const RAIN_COUNT = 1100;
-
-    const rainMeshes = GLYPHS.map((_, i) => {
+    const glyphMeshes = GLYPHS.map((_, i) => {
       const mat = new THREE.MeshBasicMaterial({ ...baseMat, map: glyphTextures[i] });
-      const mesh = new THREE.InstancedMesh(geo, mat, RAIN_COUNT);
+      const mesh = new THREE.InstancedMesh(geo, mat, COUNT);
       mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-      mesh.visible = true;
       scene.add(mesh);
       return mesh;
     });
 
-    const rainDrops = Array.from({ length: RAIN_COUNT }, () => ({
+    const dummy = new THREE.Object3D();
+    const rand = (min, max) => min + Math.random() * (max - min);
+    const SPAWN = { x: 54, y: 75, zNear: 18, zFar: -100 };
+
+    const drops = Array.from({ length: COUNT }, () => ({
       x: rand(-SPAWN.x, SPAWN.x),
       y: rand(-SPAWN.y, SPAWN.y),
       z: rand(SPAWN.zFar, SPAWN.zNear),
@@ -185,126 +193,6 @@ try {
       glyph: Math.floor(Math.random() * GLYPHS.length),
     }));
 
-    function updateRain(dt, spd) {
-      const counts = new Array(GLYPHS.length).fill(0);
-      const flickerChance = 0.02;
-
-      for (let i = 0; i < RAIN_COUNT; i++) {
-        const d = rainDrops[i];
-
-        d.y -= dt * 18 * d.sp * spd;
-
-        if (spd > 0.02) {
-          if (d.y < -SPAWN.y) d.y = SPAWN.y;
-        } else if (spd < -0.02) {
-          if (d.y > SPAWN.y) d.y = -SPAWN.y;
-        }
-
-        if (Math.random() < flickerChance) d.glyph = Math.floor(Math.random() * GLYPHS.length);
-
-        const gi = d.glyph;
-        const idx = counts[gi]++;
-        if (idx >= RAIN_COUNT) continue;
-
-        dummy.position.set(d.x, d.y, d.z);
-        dummy.scale.setScalar(d.s);
-        dummy.updateMatrix();
-        rainMeshes[gi].setMatrixAt(idx, dummy.matrix);
-      }
-
-      for (let g = 0; g < rainMeshes.length; g++) {
-        rainMeshes[g].count = counts[g];
-        rainMeshes[g].instanceMatrix.needsUpdate = true;
-      }
-    }
-
-    // ============================================================
-    // MODE B: Stream wipe
-    // ============================================================
-    const STREAM_COLUMNS = 130;
-    const STREAM_SEGMENTS = 26;
-    const STREAM_COUNT = STREAM_COLUMNS * STREAM_SEGMENTS;
-    const STREAM_SPACING = 1.05;
-
-    const streamMeshes = GLYPHS.map((_, i) => {
-      const mat = new THREE.MeshBasicMaterial({
-        ...baseMat,
-        map: glyphTextures[i],
-        blending: THREE.AdditiveBlending,
-        opacity: 1.0,
-      });
-      const mesh = new THREE.InstancedMesh(geo, mat, STREAM_COUNT);
-      mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-      mesh.visible = false;
-      scene.add(mesh);
-      return mesh;
-    });
-
-    const streams = Array.from({ length: STREAM_COLUMNS }, () => ({
-      x: rand(-SPAWN.x * 0.95, SPAWN.x * 0.95),
-      z: rand(SPAWN.zFar, SPAWN.zNear),
-      headY: rand(-SPAWN.y, SPAWN.y),
-      speed: rand(0.9, 1.8),
-      scale: rand(0.85, 1.25),
-      phase: Math.random() * 1000,
-    }));
-
-    function updateStreams(dt, elapsed) {
-      const counts = new Array(GLYPHS.length).fill(0);
-      const flickerChance = 0.20;
-      const streamSpeed = -11.5;
-
-      for (let s = 0; s < STREAM_COLUMNS; s++) {
-        const st = streams[s];
-        st.headY -= dt * 18 * st.speed * streamSpeed;
-
-        if (st.headY > SPAWN.y + STREAM_SEGMENTS * STREAM_SPACING) {
-          st.headY = -SPAWN.y - Math.random() * 12;
-        }
-
-        for (let seg = 0; seg < STREAM_SEGMENTS; seg++) {
-          const y = st.headY - seg * STREAM_SPACING;
-          if (y < -SPAWN.y - 10 || y > SPAWN.y + 10) continue;
-
-          let gi = Math.floor((st.phase + seg * 13.37 + elapsed * 90) % GLYPHS.length);
-          if (Math.random() < flickerChance) gi = Math.floor(Math.random() * GLYPHS.length);
-
-          const idx = counts[gi]++;
-          if (idx >= STREAM_COUNT) continue;
-
-          dummy.position.set(st.x, y, st.z);
-          dummy.scale.setScalar(st.scale);
-          dummy.updateMatrix();
-          streamMeshes[gi].setMatrixAt(idx, dummy.matrix);
-        }
-      }
-
-      for (let g = 0; g < streamMeshes.length; g++) {
-        streamMeshes[g].count = counts[g];
-        streamMeshes[g].instanceMatrix.needsUpdate = true;
-      }
-    }
-
-    function clearAll() {
-      for (const m of rainMeshes) { m.count = 0; m.instanceMatrix.needsUpdate = true; }
-      for (const m of streamMeshes) { m.count = 0; m.instanceMatrix.needsUpdate = true; }
-    }
-
-    // ============================================================
-    // State machine
-    // ============================================================
-    let mode = "RAIN"; // "RAIN" | "STREAM" | "BLACK"
-    let streamStart = 0;
-    let prevT = scrollProgress;
-
-    function setMode(next) {
-      mode = next;
-      for (const m of rainMeshes) m.visible = (next === "RAIN");
-      for (const m of streamMeshes) m.visible = (next === "STREAM");
-      if (next === "BLACK") clearAll();
-    }
-    setMode("RAIN");
-
     // ---------- Animation ----------
     let last = performance.now();
 
@@ -312,55 +200,83 @@ try {
       const dt = Math.min((now - last) / 1000, 0.033);
       last = now;
 
-      // Reset if scroll back up
-      if (scrollProgress < RESET_POINT && mode !== "RAIN") {
-        setMode("RAIN");
+      // Trigger rush near end (or at bottom failsafe)
+      if (!rushActive && !rushDone && (tProg >= RUSH_POINT || scrollProgress >= BOTTOM_RUSH_FAILSAFE)) {
+        rushActive = true;
+        rushStart = now;
       }
 
-      // Trigger wipe if you cross the flip point OR you are basically at the bottom
-      const crossedFlip = prevT < FLIP_POINT && scrollProgress >= FLIP_POINT;
-      const atBottom = scrollProgress >= BOTTOM_FAILSAFE;
-      prevT = scrollProgress;
+      // Decide speed & glow
+      let spd = speedFromScroll(tProg);
 
-      if (mode === "RAIN" && (crossedFlip || atBottom)) {
-        setMode("STREAM");
-        streamStart = now;
-      }
-
-      // UI: show name only after wipe
-      if (mode === "BLACK") {
-        revealEl?.classList.add("show");
-        hintEl?.classList.add("hide");
-      } else {
-        revealEl?.classList.remove("show");
-        hintEl?.classList.toggle("hide", scrollProgress > 0.10 || mode === "STREAM");
-      }
-
-      // Glow scaling
-      const tighten = smoothstep(0.05, 0.75, scrollProgress);
+      const tighten = smoothstep(0.05, 0.75, tProg);
       let strength = THREE.MathUtils.lerp(2.35, 0.95, tighten);
       let radius = THREE.MathUtils.lerp(0.85, 0.40, tighten);
       let threshold = THREE.MathUtils.lerp(0.06, 0.33, tighten);
 
-      if (mode === "STREAM") { strength = 3.0; radius = 1.0; threshold = 0.02; }
-      if (mode === "BLACK")  { strength = 0.0; radius = 0.0; threshold = 1.0; }
+      // Rush overrides (no blank, no wipe)
+      if (rushActive) {
+        const elapsed = (now - rushStart) / 1000;
+        if (elapsed < RUSH_DURATION) {
+          spd = -9.0;
+          strength = 3.2;
+          radius = 1.05;
+          threshold = 0.02;
+          for (const m of glyphMeshes) m.material.blending = THREE.AdditiveBlending;
+        } else {
+          rushActive = false;
+          rushDone = true;
+          for (const m of glyphMeshes) m.material.blending = THREE.NormalBlending;
+        }
+      } else {
+        for (const m of glyphMeshes) m.material.blending = THREE.NormalBlending;
+      }
 
       bloomPass.strength = strength;
       bloomPass.radius = radius;
       bloomPass.threshold = threshold;
 
-      if (mode === "RAIN") {
-        const spd = speedFromScroll(scrollProgress);
-        updateRain(dt, spd);
-      } else if (mode === "STREAM") {
-        const elapsed = (now - streamStart) / 1000;
-        if (elapsed > STREAM_BURST_DURATION) {
-          setMode("BLACK");
-        } else {
-          updateStreams(dt, elapsed);
-        }
+      // UI behavior:
+      // - show hint early
+      // - show name after rush completes
+      hintEl?.classList.toggle("hide", tProg > 0.10 || rushActive);
+
+      if (rushDone) {
+        revealEl?.classList.add("show");
       } else {
-        clearAll();
+        revealEl?.classList.remove("show");
+      }
+
+      // Build instances each frame
+      const counts = new Array(GLYPHS.length).fill(0);
+      const flickerChance = rushActive ? 0.12 : 0.02;
+
+      for (let i = 0; i < COUNT; i++) {
+        const d = drops[i];
+
+        d.y -= dt * 18 * d.sp * spd;
+
+        if (spd >= 0) {
+          if (d.y < -SPAWN.y) d.y = SPAWN.y;
+        } else {
+          if (d.y > SPAWN.y) d.y = -SPAWN.y;
+        }
+
+        if (Math.random() < flickerChance) d.glyph = Math.floor(Math.random() * GLYPHS.length);
+
+        const gi = d.glyph;
+        const idx = counts[gi]++;
+        if (idx >= COUNT) continue;
+
+        dummy.position.set(d.x, d.y, d.z);
+        dummy.scale.setScalar(d.s);
+        dummy.updateMatrix();
+        glyphMeshes[gi].setMatrixAt(idx, dummy.matrix);
+      }
+
+      for (let g = 0; g < glyphMeshes.length; g++) {
+        glyphMeshes[g].count = counts[g];
+        glyphMeshes[g].instanceMatrix.needsUpdate = true;
       }
 
       composer.render();
