@@ -3,17 +3,19 @@ try {
   const status = document.createElement("div");
   status.style.cssText = `
     position:fixed; top:12px; left:12px; z-index:9999;
-    font: 12px/1.2 monospace; color:#0f0;
-    background: rgba(0,0,0,0.55);
+    font: 12px/1.25 monospace; color:#0f0;
+    background: rgba(0,0,0,0.60);
     padding:8px 10px; border-radius:8px;
     pointer-events:none;
+    white-space:pre;
     transition: opacity 0.6s ease;`;
-  status.textContent = "Loading script.js v21...";
+  status.textContent = "Loading script.js v22...";
   document.body.appendChild(status);
+
+  // fade the “loading” label but keep the box for debug numbers
   setTimeout(() => {
-    status.style.opacity = "0";
-    setTimeout(() => status.remove(), 700);
-  }, 1600);
+    status.style.opacity = "0.95";
+  }, 600);
 
   import("three").then(async (THREE) => {
     const { EffectComposer } = await import("three/addons/postprocessing/EffectComposer.js");
@@ -59,30 +61,41 @@ try {
 
     // ---------- Scroll control ----------
     let scrollProgress = 0; // physical 0..1
-    let tProg = 0;          // virtual 0..1 (slower early but ALWAYS reaches 1 at bottom)
+    let tProg = 0;          // virtual 0..1
 
-    // Larger gamma => “longer page feel”
+    // makes it feel “longer” but ALWAYS reaches 1 at the bottom (because it’s just a power curve)
     const GAMMA = 1.65;
 
-    function updateScrollProgress() {
-      const maxScroll = document.documentElement.scrollHeight - window.innerHeight;
-      scrollProgress = maxScroll <= 0 ? 0 : Math.min(Math.max(window.scrollY / maxScroll, 0), 1);
+    // CHANGED: pixel-based bottom detection (guaranteed)
+    const ACTIVATE_PX_FROM_BOTTOM = 12;
+
+    function readScroll() {
+      const doc = document.documentElement;
+      const maxScroll = Math.max(0, doc.scrollHeight - window.innerHeight);
+      const y = window.scrollY || doc.scrollTop || 0;
+      const clampedY = Math.min(Math.max(y, 0), maxScroll);
+
+      scrollProgress = maxScroll <= 0 ? 0 : (clampedY / maxScroll);
       tProg = Math.pow(scrollProgress, GAMMA);
+
+      const pxFromBottom = Math.max(0, maxScroll - clampedY);
+      return { maxScroll, y: clampedY, pxFromBottom };
     }
-    window.addEventListener("scroll", updateScrollProgress, { passive: true });
-    updateScrollProgress();
+
+    // still listen to scroll, but we’ll also read every frame
+    window.addEventListener("scroll", readScroll, { passive: true });
+    let scrollInfo = readScroll();
 
     function smoothstep(edge0, edge1, x) {
       const t = Math.min(Math.max((x - edge0) / (edge1 - edge0), 0), 1);
       return t * t * (3 - 2 * t);
     }
 
-    // ---------- Speed curve ----------
-    // Slows down longer, then reverses upward.
+    // ---------- Speed curve (slow -> near stop -> reverse) ----------
     function speedFromScroll(t) {
       const slowStart = 0.22;
-      const stopPoint = 0.62; // gets very slow later
-      const flipPoint = 0.78; // reverse later
+      const stopPoint = 0.62;
+      const flipPoint = 0.78;
 
       if (t < slowStart) return 1.0;
 
@@ -99,11 +112,9 @@ try {
       return THREE.MathUtils.lerp(0.0, -1.25, smoothstep(flipPoint, 1.0, t));
     }
 
-    // ---------- Rush trigger ----------
-    // This is NOT a wipe/blank — it just temporarily boosts upward speed + bloom.
-    const RUSH_POINT = 0.92;             // virtual progress
-    const RUSH_DURATION = 2.2;           // seconds
-    const BOTTOM_RUSH_FAILSAFE = 0.995;  // physical progress fail-safe
+    // ---------- Rush (NO wipe / NO blackout) ----------
+    const RUSH_POINT = 0.92;   // virtual progress trigger
+    const RUSH_DURATION = 2.2; // seconds
 
     let rushActive = false;
     let rushDone = false;
@@ -200,8 +211,13 @@ try {
       const dt = Math.min((now - last) / 1000, 0.033);
       last = now;
 
-      // Trigger rush near end (or at bottom failsafe)
-      if (!rushActive && !rushDone && (tProg >= RUSH_POINT || scrollProgress >= BOTTOM_RUSH_FAILSAFE)) {
+      // CHANGED: read scroll EVERY frame (not only on scroll events)
+      scrollInfo = readScroll();
+
+      const atBottomPx = scrollInfo.pxFromBottom <= ACTIVATE_PX_FROM_BOTTOM;
+
+      // Trigger rush (virtual) OR (pixel-bottom)
+      if (!rushActive && !rushDone && (tProg >= RUSH_POINT || atBottomPx)) {
         rushActive = true;
         rushStart = now;
       }
@@ -214,7 +230,6 @@ try {
       let radius = THREE.MathUtils.lerp(0.85, 0.40, tighten);
       let threshold = THREE.MathUtils.lerp(0.06, 0.33, tighten);
 
-      // Rush overrides (no blank, no wipe)
       if (rushActive) {
         const elapsed = (now - rushStart) / 1000;
         if (elapsed < RUSH_DURATION) {
@@ -236,16 +251,11 @@ try {
       bloomPass.radius = radius;
       bloomPass.threshold = threshold;
 
-      // UI behavior:
-      // - show hint early
-      // - show name after rush completes
+      // UI:
       hintEl?.classList.toggle("hide", tProg > 0.10 || rushActive);
 
-      if (rushDone) {
-        revealEl?.classList.add("show");
-      } else {
-        revealEl?.classList.remove("show");
-      }
+      if (rushDone) revealEl?.classList.add("show");
+      else revealEl?.classList.remove("show");
 
       // Build instances each frame
       const counts = new Array(GLYPHS.length).fill(0);
@@ -278,6 +288,14 @@ try {
         glyphMeshes[g].count = counts[g];
         glyphMeshes[g].instanceMatrix.needsUpdate = true;
       }
+
+      // DEBUG line so we can see why it would ever not trigger
+      status.textContent =
+        `script.js v22\n` +
+        `scrollY=${Math.round(scrollInfo.y)} / max=${Math.round(scrollInfo.maxScroll)}\n` +
+        `pxFromBottom=${Math.round(scrollInfo.pxFromBottom)} (<=${ACTIVATE_PX_FROM_BOTTOM} triggers)\n` +
+        `scrollProgress=${scrollProgress.toFixed(4)}  tProg=${tProg.toFixed(4)}\n` +
+        `rushActive=${rushActive}  rushDone=${rushDone}`;
 
       composer.render();
       requestAnimationFrame(animate);
