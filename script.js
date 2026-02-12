@@ -8,7 +8,7 @@ try {
     padding:8px 10px; border-radius:8px;
     pointer-events:none;
     transition: opacity 0.6s ease;`;
-  status.textContent = "Loading script.js v19...";
+  status.textContent = "Loading script.js v20...";
   document.body.appendChild(status);
   setTimeout(() => {
     status.style.opacity = "0";
@@ -57,18 +57,11 @@ try {
     const revealEl = document.getElementById("reveal");
     const hintEl = document.getElementById("hint");
 
-    // ---------- Scroll control ----------
-    let scrollProgress = 0; // 0..1 physical
-    let tProg = 0;          // 0..1 virtual (slower early, still reaches 1)
-
-    // CHANGED: makes the page feel longer but ALWAYS reaches 1 at the bottom.
-    // Larger gamma => slower progress at first, then catches up near the end.
-    const GAMMA = 1.75;
-
+    // ---------- Scroll ----------
+    let scrollProgress = 0; // 0..1
     function updateScroll() {
       const maxScroll = document.documentElement.scrollHeight - window.innerHeight;
       scrollProgress = maxScroll <= 0 ? 0 : Math.min(Math.max(window.scrollY / maxScroll, 0), 1);
-      tProg = Math.pow(scrollProgress, GAMMA); // <-- key fix
     }
     window.addEventListener("scroll", updateScroll, { passive: true });
     updateScroll();
@@ -80,36 +73,29 @@ try {
 
     // ---------- Speed curve (slows longer before reverse) ----------
     function speedFromScroll(t) {
-      // These are on virtual progress tProg
       const slowStart = 0.22;
-      const stopPoint = 0.62;  // reach near-stop later
-      const flipPoint = 0.78;  // reverse later
+      const stopPoint = 0.62;  // later = more time slowing
+      const flipPoint = 0.78;  // later = more time near 0 before reverse
 
       if (t < slowStart) return 1.0;
 
       if (t < stopPoint) {
         const k = smoothstep(slowStart, stopPoint, t);
-        return THREE.MathUtils.lerp(1.0, 0.08, k); // slow to very low
+        return THREE.MathUtils.lerp(1.0, 0.08, k);
       }
 
       if (t < flipPoint) {
         const k = smoothstep(stopPoint, flipPoint, t);
-        return THREE.MathUtils.lerp(0.08, 0.0, k); // linger near 0
+        return THREE.MathUtils.lerp(0.08, 0.0, k);
       }
 
-      // after flip, go negative (up)
       return THREE.MathUtils.lerp(0.0, -1.25, smoothstep(flipPoint, 1.0, t));
     }
 
     // ---------- Trigger points ----------
-    // We trigger columns when the “reverse” section begins (like v15),
-    // but now it uses tProg so it respects the longer feel.
-    const FLIP_POINT = 0.78;
-
-    // stream wipe duration
+    const FLIP_POINT = 0.78;              // start wipe around here
+    const BOTTOM_FAILSAFE = 0.995;        // CHANGED: guaranteed trigger at bottom
     const STREAM_BURST_DURATION = 2.0;
-
-    // scroll back up to restore rain
     const RESET_POINT = 0.42;
 
     // ---------- Glyph set ----------
@@ -170,7 +156,6 @@ try {
       blending: THREE.NormalBlending,
       opacity: 0.98,
     };
-
     const geo = new THREE.PlaneGeometry(2.10, 2.10);
 
     const dummy = new THREE.Object3D();
@@ -178,7 +163,7 @@ try {
     const SPAWN = { x: 54, y: 75, zNear: 18, zFar: -105 };
 
     // ============================================================
-    // MODE A: Rain particles
+    // MODE A: Rain
     // ============================================================
     const RAIN_COUNT = 1100;
 
@@ -209,7 +194,6 @@ try {
 
         d.y -= dt * 18 * d.sp * spd;
 
-        // wrap only when moving
         if (spd > 0.02) {
           if (d.y < -SPAWN.y) d.y = SPAWN.y;
         } else if (spd < -0.02) {
@@ -235,7 +219,7 @@ try {
     }
 
     // ============================================================
-    // MODE B: Stream columns wipe
+    // MODE B: Stream wipe
     // ============================================================
     const STREAM_COLUMNS = 130;
     const STREAM_SEGMENTS = 26;
@@ -268,8 +252,6 @@ try {
     function updateStreams(dt, elapsed) {
       const counts = new Array(GLYPHS.length).fill(0);
       const flickerChance = 0.20;
-
-      // fast upward wall
       const streamSpeed = -11.5;
 
       for (let s = 0; s < STREAM_COLUMNS; s++) {
@@ -304,34 +286,23 @@ try {
     }
 
     function clearAll() {
-      for (const m of rainMeshes) {
-        m.count = 0;
-        m.instanceMatrix.needsUpdate = true;
-      }
-      for (const m of streamMeshes) {
-        m.count = 0;
-        m.instanceMatrix.needsUpdate = true;
-      }
+      for (const m of rainMeshes) { m.count = 0; m.instanceMatrix.needsUpdate = true; }
+      for (const m of streamMeshes) { m.count = 0; m.instanceMatrix.needsUpdate = true; }
     }
 
     // ============================================================
     // State machine
     // ============================================================
-    let mode = "RAIN";   // "RAIN" | "STREAM" | "BLACK"
+    let mode = "RAIN"; // "RAIN" | "STREAM" | "BLACK"
     let streamStart = 0;
-    let prevT = tProg;
+    let prevT = scrollProgress;
 
     function setMode(next) {
       mode = next;
-      const rainVisible = next === "RAIN";
-      const streamVisible = next === "STREAM";
-
-      for (const m of rainMeshes) m.visible = rainVisible;
-      for (const m of streamMeshes) m.visible = streamVisible;
-
+      for (const m of rainMeshes) m.visible = (next === "RAIN");
+      for (const m of streamMeshes) m.visible = (next === "STREAM");
       if (next === "BLACK") clearAll();
     }
-
     setMode("RAIN");
 
     // ---------- Animation ----------
@@ -342,52 +313,44 @@ try {
       last = now;
 
       // Reset if scroll back up
-      if (tProg < RESET_POINT && mode !== "RAIN") {
+      if (scrollProgress < RESET_POINT && mode !== "RAIN") {
         setMode("RAIN");
       }
 
-      // Trigger columns when you cross into the reverse zone
-      const crossedFlip = prevT < FLIP_POINT && tProg >= FLIP_POINT;
-      prevT = tProg;
+      // Trigger wipe if you cross the flip point OR you are basically at the bottom
+      const crossedFlip = prevT < FLIP_POINT && scrollProgress >= FLIP_POINT;
+      const atBottom = scrollProgress >= BOTTOM_FAILSAFE;
+      prevT = scrollProgress;
 
-      if (mode === "RAIN" && crossedFlip) {
+      if (mode === "RAIN" && (crossedFlip || atBottom)) {
         setMode("STREAM");
         streamStart = now;
       }
 
-      // UI: name only after wipe
+      // UI: show name only after wipe
       if (mode === "BLACK") {
         revealEl?.classList.add("show");
         hintEl?.classList.add("hide");
       } else {
         revealEl?.classList.remove("show");
-        hintEl?.classList.toggle("hide", tProg > 0.10 || mode === "STREAM");
+        hintEl?.classList.toggle("hide", scrollProgress > 0.10 || mode === "STREAM");
       }
 
       // Glow scaling
-      const tighten = smoothstep(0.05, 0.75, tProg);
+      const tighten = smoothstep(0.05, 0.75, scrollProgress);
       let strength = THREE.MathUtils.lerp(2.35, 0.95, tighten);
       let radius = THREE.MathUtils.lerp(0.85, 0.40, tighten);
       let threshold = THREE.MathUtils.lerp(0.06, 0.33, tighten);
 
-      if (mode === "STREAM") {
-        strength = 3.0;
-        radius = 1.0;
-        threshold = 0.02;
-      }
-      if (mode === "BLACK") {
-        strength = 0.0;
-        radius = 0.0;
-        threshold = 1.0;
-      }
+      if (mode === "STREAM") { strength = 3.0; radius = 1.0; threshold = 0.02; }
+      if (mode === "BLACK")  { strength = 0.0; radius = 0.0; threshold = 1.0; }
 
       bloomPass.strength = strength;
       bloomPass.radius = radius;
       bloomPass.threshold = threshold;
 
-      // Render modes
       if (mode === "RAIN") {
-        const spd = speedFromScroll(tProg);
+        const spd = speedFromScroll(scrollProgress);
         updateRain(dt, spd);
       } else if (mode === "STREAM") {
         const elapsed = (now - streamStart) / 1000;
@@ -396,7 +359,7 @@ try {
         } else {
           updateStreams(dt, elapsed);
         }
-      } else if (mode === "BLACK") {
+      } else {
         clearAll();
       }
 
