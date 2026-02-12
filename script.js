@@ -1,20 +1,25 @@
 try {
+  // Green status box (auto-hides)
   const status = document.createElement("div");
   status.style.cssText = `
     position:fixed; top:48px; left:10px; z-index:9999;
     font: 12px/1.2 monospace; color:#0f0;
-    background: rgba(0,0,0,0.6);
+    background: rgba(0,0,0,0.55);
     padding:8px 10px; border-radius:8px;
-    pointer-events:none;`;
+    pointer-events:none;
+    transition: opacity 0.6s ease;`;
   status.textContent = "Loading script.js v13...";
   document.body.appendChild(status);
+
+  setTimeout(() => {
+    status.style.opacity = "0";
+    setTimeout(() => status.remove(), 700);
+  }, 2000);
 
   import("three").then(async (THREE) => {
     const { EffectComposer } = await import("three/addons/postprocessing/EffectComposer.js");
     const { RenderPass } = await import("three/addons/postprocessing/RenderPass.js");
     const { UnrealBloomPass } = await import("three/addons/postprocessing/UnrealBloomPass.js");
-
-    status.textContent = "✅ script.js v13 loaded (Three OK)";
 
     // ---------- Setup ----------
     const canvas = document.getElementById("c");
@@ -37,15 +42,15 @@ try {
     scene.add(new THREE.AmbientLight(0xffffff, 0.25));
     scene.fog = new THREE.Fog(0x050605, 25, 120);
 
-    // ---------- Bloom ----------
+    // ---------- Bloom (scroll-driven) ----------
     const composer = new EffectComposer(renderer);
     composer.addPass(new RenderPass(scene, camera));
 
     const bloomPass = new UnrealBloomPass(
       new THREE.Vector2(window.innerWidth, window.innerHeight),
-      1.25, // will be overridden by scroll
+      1.25,
       0.55,
-      0.18  // will be overridden by scroll
+      0.18
     );
     composer.addPass(bloomPass);
 
@@ -74,7 +79,6 @@ try {
       return t > 0.62;
     }
 
-    // Smoothstep helper
     function smoothstep(edge0, edge1, x) {
       const t = Math.min(Math.max((x - edge0) / (edge1 - edge0), 0), 1);
       return t * t * (3 - 2 * t);
@@ -135,7 +139,7 @@ try {
     // ---------- Instanced meshes ----------
     const COUNT = 1000;
 
-    // CHANGED: bigger planes for larger glyphs
+    // Bigger glyphs
     const geo = new THREE.PlaneGeometry(1.75, 1.75);
 
     const baseMat = {
@@ -158,12 +162,11 @@ try {
 
     const SPAWN = { x: 52, y: 72, zNear: 18, zFar: -95 };
 
-    // CHANGED: larger per-drop scale range
     const drops = Array.from({ length: COUNT }, () => ({
       x: rand(-SPAWN.x, SPAWN.x),
       y: rand(-SPAWN.y, SPAWN.y),
       z: rand(SPAWN.zFar, SPAWN.zNear),
-      s: 0.75 + Math.random() * 1.05,   // CHANGED (was ~0.45..1.4)
+      s: 0.75 + Math.random() * 1.05,
       sp: 0.6 + Math.random() * 2.2,
       glyph: Math.floor(Math.random() * GLYPHS.length),
     }));
@@ -183,6 +186,7 @@ try {
       dummy.updateMatrix();
       glyphMeshes[gi].setMatrixAt(idx, dummy.matrix);
     }
+
     for (let g = 0; g < glyphMeshes.length; g++) {
       glyphMeshes[g].count = initCounts[g];
       glyphMeshes[g].instanceMatrix.needsUpdate = true;
@@ -200,14 +204,12 @@ try {
       revealEl?.classList.toggle("show", revealFromScroll(scrollProgress));
       hintEl?.classList.toggle("hide", scrollProgress > 0.12);
 
-      // ---------- CHANGED: Scroll-driven glow tuning ----------
-      // At top (t=0): strong dreamy glow
-      // As you scroll: glow tightens so symbols remain readable
+      // Scroll-driven glow tuning (strong at top, tighter later)
       const t = scrollProgress;
-      const tighten = smoothstep(0.05, 0.55, t); // 0 -> 1 as you scroll
-      bloomPass.strength = THREE.MathUtils.lerp(1.75, 0.75, tighten);
-      bloomPass.radius   = THREE.MathUtils.lerp(0.75, 0.35, tighten);
-      bloomPass.threshold= THREE.MathUtils.lerp(0.08, 0.35, tighten);
+      const tighten = smoothstep(0.05, 0.55, t);
+      bloomPass.strength  = THREE.MathUtils.lerp(1.75, 0.75, tighten);
+      bloomPass.radius    = THREE.MathUtils.lerp(0.75, 0.35, tighten);
+      bloomPass.threshold = THREE.MathUtils.lerp(0.08, 0.35, tighten);
 
       const counts = new Array(GLYPHS.length).fill(0);
 
@@ -222,7 +224,6 @@ try {
           if (d.y > SPAWN.y) d.y = -SPAWN.y;
         }
 
-        // Flicker to a new symbol sometimes
         if (Math.random() < 0.02) {
           d.glyph = Math.floor(Math.random() * GLYPHS.length);
         }
