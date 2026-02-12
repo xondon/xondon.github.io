@@ -3,17 +3,19 @@ try {
   const status = document.createElement("div");
   status.style.cssText = `
     position:fixed; top:12px; left:12px; z-index:9999;
-    font: 12px/1.2 monospace; color:#0f0;
-    background: rgba(0,0,0,0.55);
+    font: 12px/1.25 monospace; color:#0f0;
+    background: rgba(0,0,0,0.60);
     padding:8px 10px; border-radius:8px;
     pointer-events:none;
+    white-space:pre;
     transition: opacity 0.6s ease;`;
-  status.textContent = "Loading script.js v17...";
+  status.textContent = "Loading script.js v22...";
   document.body.appendChild(status);
+
+  // fade the “loading” label but keep the box for debug numbers
   setTimeout(() => {
-    status.style.opacity = "0";
-    setTimeout(() => status.remove(), 700);
-  }, 1600);
+    status.style.opacity = "0.95";
+  }, 600);
 
   import("three").then(async (THREE) => {
     const { EffectComposer } = await import("three/addons/postprocessing/EffectComposer.js");
@@ -58,73 +60,65 @@ try {
     const hintEl = document.getElementById("hint");
 
     // ---------- Scroll control ----------
-    // Physical scroll (0..1)
-    let scrollProgress = 0;
+    let scrollProgress = 0; // physical 0..1
+    let tProg = 0;          // virtual 0..1
 
-    // CHANGED: Virtual mapping makes the page *feel longer* (less sensitive wheel)
-    // Larger value = more physical scroll needed to reach the same animation progress.
-    const SCROLL_STRETCH = 1.85;
+    // makes it feel “longer” but ALWAYS reaches 1 at the bottom (because it’s just a power curve)
+    const GAMMA = 1.65;
 
-    // This is the progress the animation actually uses (0..1)
-    let tProg = 0;
+    // CHANGED: pixel-based bottom detection (guaranteed)
+    const ACTIVATE_PX_FROM_BOTTOM = 12;
 
-    function updateScrollProgress() {
-      const maxScroll = document.documentElement.scrollHeight - window.innerHeight;
-      scrollProgress = maxScroll <= 0 ? 0 : Math.min(Math.max(window.scrollY / maxScroll, 0), 1);
+    function readScroll() {
+      const doc = document.documentElement;
+      const maxScroll = Math.max(0, doc.scrollHeight - window.innerHeight);
+      const y = window.scrollY || doc.scrollTop || 0;
+      const clampedY = Math.min(Math.max(y, 0), maxScroll);
 
-      // CHANGED: map physical scroll -> slower virtual progress
-      // Example: with 1.85, you reach virtual 1.0 only near the *very* bottom.
-      tProg = Math.min(scrollProgress / SCROLL_STRETCH, 1);
+      scrollProgress = maxScroll <= 0 ? 0 : (clampedY / maxScroll);
+      tProg = Math.pow(scrollProgress, GAMMA);
+
+      const pxFromBottom = Math.max(0, maxScroll - clampedY);
+      return { maxScroll, y: clampedY, pxFromBottom };
     }
-    window.addEventListener("scroll", updateScrollProgress, { passive: true });
-    updateScrollProgress();
+
+    // still listen to scroll, but we’ll also read every frame
+    window.addEventListener("scroll", readScroll, { passive: true });
+    let scrollInfo = readScroll();
 
     function smoothstep(edge0, edge1, x) {
       const t = Math.min(Math.max((x - edge0) / (edge1 - edge0), 0), 1);
       return t * t * (3 - 2 * t);
     }
 
-    // CHANGED: New curve = slower longer before reverse
+    // ---------- Speed curve (slow -> near stop -> reverse) ----------
     function speedFromScroll(t) {
-      // These operate on VIRTUAL progress (tProg)
-      const slowStart = 0.22;  // start slowing earlier
-      const stopPoint = 0.58;  // reach near-stop later
-      const flipPoint = 0.74;  // reverse much later (more slow time)
+      const slowStart = 0.22;
+      const stopPoint = 0.62;
+      const flipPoint = 0.78;
 
       if (t < slowStart) return 1.0;
 
-      // ease down from 1 -> 0.05 (very slow)
       if (t < stopPoint) {
         const k = smoothstep(slowStart, stopPoint, t);
-        return THREE.MathUtils.lerp(1.0, 0.05, k);
+        return THREE.MathUtils.lerp(1.0, 0.06, k);
       }
 
-      // linger near-zero before reverse
       if (t < flipPoint) {
         const k = smoothstep(stopPoint, flipPoint, t);
-        return THREE.MathUtils.lerp(0.05, 0.0, k);
+        return THREE.MathUtils.lerp(0.06, 0.0, k);
       }
 
-      // after flip, go negative (upwards) gradually (but burst will override near end)
       return THREE.MathUtils.lerp(0.0, -1.25, smoothstep(flipPoint, 1.0, t));
     }
 
-    function revealFromScroll(t) {
-      // CHANGED: name should be AFTER burst; we’ll control reveal directly in code.
-      // Keeping this for compatibility, but not used for showing name during rain.
-      return t > 0.62;
-    }
+    // ---------- Rush (NO wipe / NO blackout) ----------
+    const RUSH_POINT = 0.92;   // virtual progress trigger
+    const RUSH_DURATION = 2.2; // seconds
 
-    // ---------- End “energy rush” + blackout state ----------
-    // CHANGED: Burst points now use VIRTUAL progress (tProg)
-    const BURST_POINT = 0.92;     // near the end of the virtual scroll
-    const BURST_DURATION = 2.2;   // seconds
-    const RESET_POINT = 0.45;     // scroll back up past here (virtual) to restore
-
-    let burstActive = false;
-    let burstDone = false;
-    let burstStart = 0;
-    let blank = false;
+    let rushActive = false;
+    let rushDone = false;
+    let rushStart = 0;
 
     // ---------- Glyph set ----------
     const GLYPHS = [
@@ -180,7 +174,6 @@ try {
 
     // ---------- Instanced meshes ----------
     const COUNT = 1100;
-
     const geo = new THREE.PlaneGeometry(2.10, 2.10);
 
     const baseMat = {
@@ -200,7 +193,6 @@ try {
 
     const dummy = new THREE.Object3D();
     const rand = (min, max) => min + Math.random() * (max - min);
-
     const SPAWN = { x: 54, y: 75, zNear: 18, zFar: -100 };
 
     const drops = Array.from({ length: COUNT }, () => ({
@@ -212,35 +204,6 @@ try {
       glyph: Math.floor(Math.random() * GLYPHS.length),
     }));
 
-    function clearGlyphs() {
-      for (let g = 0; g < glyphMeshes.length; g++) {
-        glyphMeshes[g].count = 0;
-        glyphMeshes[g].instanceMatrix.needsUpdate = true;
-      }
-    }
-
-    function initialPlace() {
-      for (let g = 0; g < glyphMeshes.length; g++) glyphMeshes[g].count = 0;
-      const counts = new Array(GLYPHS.length).fill(0);
-
-      for (let i = 0; i < COUNT; i++) {
-        const d = drops[i];
-        const gi = d.glyph;
-        const idx = counts[gi]++;
-        if (idx >= COUNT) continue;
-
-        dummy.position.set(d.x, d.y, d.z);
-        dummy.scale.setScalar(d.s);
-        dummy.updateMatrix();
-        glyphMeshes[gi].setMatrixAt(idx, dummy.matrix);
-      }
-      for (let g = 0; g < glyphMeshes.length; g++) {
-        glyphMeshes[g].count = counts[g];
-        glyphMeshes[g].instanceMatrix.needsUpdate = true;
-      }
-    }
-    initialPlace();
-
     // ---------- Animation ----------
     let last = performance.now();
 
@@ -248,38 +211,18 @@ try {
       const dt = Math.min((now - last) / 1000, 0.033);
       last = now;
 
-      // Reset behavior when user scrolls back up (use virtual progress)
-      if (tProg < RESET_POINT && (blank || burstDone || burstActive)) {
-        burstActive = false;
-        burstDone = false;
-        blank = false;
-        for (const m of glyphMeshes) m.material.blending = THREE.NormalBlending;
-        initialPlace();
+      // CHANGED: read scroll EVERY frame (not only on scroll events)
+      scrollInfo = readScroll();
+
+      const atBottomPx = scrollInfo.pxFromBottom <= ACTIVATE_PX_FROM_BOTTOM;
+
+      // Trigger rush (virtual) OR (pixel-bottom)
+      if (!rushActive && !rushDone && (tProg >= RUSH_POINT || atBottomPx)) {
+        rushActive = true;
+        rushStart = now;
       }
 
-      // Trigger burst near end of VIRTUAL scroll
-      if (!burstActive && !burstDone && tProg >= BURST_POINT) {
-        burstActive = true;
-        burstStart = now;
-      }
-
-      // If blank, keep screen black + SHOW NAME AFTER BURST
-      if (blank) {
-        // CHANGED: show name after rush
-        revealEl?.classList.add("show");
-        hintEl?.classList.add("hide");
-
-        clearGlyphs();
-        bloomPass.strength = 0.0;
-        composer.render();
-        requestAnimationFrame(animate);
-        return;
-      }
-
-      // During normal rain: hide name (so it appears only after rush)
-      revealEl?.classList.remove("show");
-
-      // Determine speed + glow from scroll / burst state
+      // Decide speed & glow
       let spd = speedFromScroll(tProg);
 
       const tighten = smoothstep(0.05, 0.75, tProg);
@@ -287,33 +230,18 @@ try {
       let radius = THREE.MathUtils.lerp(0.85, 0.40, tighten);
       let threshold = THREE.MathUtils.lerp(0.06, 0.33, tighten);
 
-      if (burstActive) {
-        const elapsed = (now - burstStart) / 1000;
-        if (elapsed < BURST_DURATION) {
-          // super fast upward rush
+      if (rushActive) {
+        const elapsed = (now - rushStart) / 1000;
+        if (elapsed < RUSH_DURATION) {
           spd = -9.0;
-
-          // maximum bloom for “solid blur line”
           strength = 3.2;
           radius = 1.05;
           threshold = 0.02;
-
           for (const m of glyphMeshes) m.material.blending = THREE.AdditiveBlending;
         } else {
-          // End burst -> blackout
-          burstActive = false;
-          burstDone = true;
-          blank = true;
-
-          clearGlyphs();
-
-          // CHANGED: show name after rush, not before
-          revealEl?.classList.add("show");
-          hintEl?.classList.add("hide");
-
-          composer.render();
-          requestAnimationFrame(animate);
-          return;
+          rushActive = false;
+          rushDone = true;
+          for (const m of glyphMeshes) m.material.blending = THREE.NormalBlending;
         }
       } else {
         for (const m of glyphMeshes) m.material.blending = THREE.NormalBlending;
@@ -323,27 +251,28 @@ try {
       bloomPass.radius = radius;
       bloomPass.threshold = threshold;
 
-      // Hint: still show early, hide later / during burst
-      hintEl?.classList.toggle("hide", tProg > 0.10 || burstActive);
+      // UI:
+      hintEl?.classList.toggle("hide", tProg > 0.10 || rushActive);
 
+      if (rushDone) revealEl?.classList.add("show");
+      else revealEl?.classList.remove("show");
+
+      // Build instances each frame
       const counts = new Array(GLYPHS.length).fill(0);
-      const flickerChance = burstActive ? 0.12 : 0.02;
+      const flickerChance = rushActive ? 0.12 : 0.02;
 
       for (let i = 0; i < COUNT; i++) {
         const d = drops[i];
 
         d.y -= dt * 18 * d.sp * spd;
 
-        // wrap
         if (spd >= 0) {
           if (d.y < -SPAWN.y) d.y = SPAWN.y;
         } else {
           if (d.y > SPAWN.y) d.y = -SPAWN.y;
         }
 
-        if (Math.random() < flickerChance) {
-          d.glyph = Math.floor(Math.random() * GLYPHS.length);
-        }
+        if (Math.random() < flickerChance) d.glyph = Math.floor(Math.random() * GLYPHS.length);
 
         const gi = d.glyph;
         const idx = counts[gi]++;
@@ -359,6 +288,14 @@ try {
         glyphMeshes[g].count = counts[g];
         glyphMeshes[g].instanceMatrix.needsUpdate = true;
       }
+
+      // DEBUG line so we can see why it would ever not trigger
+      status.textContent =
+        `script.js v22\n` +
+        `scrollY=${Math.round(scrollInfo.y)} / max=${Math.round(scrollInfo.maxScroll)}\n` +
+        `pxFromBottom=${Math.round(scrollInfo.pxFromBottom)} (<=${ACTIVATE_PX_FROM_BOTTOM} triggers)\n` +
+        `scrollProgress=${scrollProgress.toFixed(4)}  tProg=${tProg.toFixed(4)}\n` +
+        `rushActive=${rushActive}  rushDone=${rushDone}`;
 
       composer.render();
       requestAnimationFrame(animate);
