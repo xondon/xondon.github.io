@@ -104,8 +104,9 @@ html, body { height:100%; margin:0; background: var(--bg); color:#fff; font-fami
   text-transform: uppercase;
 }
 
+/* CHANGED: much longer page so scroll progress reliably crosses thresholds */
 .scrollSpacer{
-  height: 220vh;
+  height: 500vh;
   position: relative;
   z-index: 1;
 }
