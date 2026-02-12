@@ -1,52 +1,128 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Xondon</title>
-  <link rel="stylesheet" href="styles.css" />
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Matrix Test</title>
 
-  <!-- IMPORTANT: This makes "three" and "three/addons/" work on plain GitHub Pages -->
-  <script type="importmap">
-  {
-    "imports": {
-      "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
-      "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
-    }
+<style>
+  html,body { margin:0; height:100%; background:#000; overflow:hidden; }
+  #c { width:100%; height:100%; display:block; }
+  .label {
+    position:fixed; top:10px; left:10px;
+    color:#0f0; font-family:monospace; font-size:14px;
+    background:rgba(0,0,0,0.5); padding:6px 10px; border-radius:6px;
   }
-  </script>
+</style>
+
+<!-- Import map so Three works on plain GitHub Pages -->
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
 </head>
+
 <body>
-  <canvas id="c"></canvas>
+<canvas id="c"></canvas>
+<div class="label">Matrix Test — If you see green glow, it works</div>
 
-  <div class="overlay">
-    <div class="topbar">
-      <div class="brand">XD</div>
-      <nav class="nav">
-        <a href="./">Home</a>
-        <a href="./resume.html">Resume</a>
-        <a href="./project.html">Projects</a>
-        <a href="./about.html">About</a>
-      </nav>
-    </div>
+<script type="module">
+import * as THREE from "three";
+import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
+import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
+import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js";
 
-    <div class="center">
-      <div class="reveal" id="reveal">
-        <div class="name">Dominic <span>Donatucci</span></div>
-        <div class="company">Deity</div>
-      </div>
-    </div>
+/* ---------- BASIC ---------- */
+const canvas = document.getElementById("c");
+const renderer = new THREE.WebGLRenderer({ canvas, antialias:true });
+renderer.setSize(innerWidth, innerHeight);
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));
 
-    <div class="scrollHint" id="hint">
-      <div class="mouse"></div>
-      <div class="text">Scroll</div>
-    </div>
-  </div>
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x000000);
 
-  <!-- Creates scroll distance while keeping the canvas fixed -->
-  <div class="scrollSpacer"></div>
+const camera = new THREE.PerspectiveCamera(45, innerWidth/innerHeight, 0.1, 200);
+camera.position.z = 30;
 
-  <!-- Cache-buster: bump v= number when testing -->
-  <script type="module" src="script.js?v=7"></script>
+/* ---------- BLOOM ---------- */
+const composer = new EffectComposer(renderer);
+composer.addPass(new RenderPass(scene,camera));
+
+const bloom = new UnrealBloomPass(
+  new THREE.Vector2(innerWidth,innerHeight),
+  1.6,  // strength
+  0.6,  // radius
+  0.1   // threshold
+);
+composer.addPass(bloom);
+
+/* ---------- DIGIT TEXTURE ---------- */
+function makeTex(d){
+  const c = document.createElement("canvas");
+  c.width = 128; c.height = 128;
+  const x = c.getContext("2d");
+  x.fillStyle="#000"; x.fillRect(0,0,128,128);
+  x.shadowColor="#0f0"; x.shadowBlur=20;
+  x.fillStyle="#0f0";
+  x.font="bold 90px monospace";
+  x.textAlign="center"; x.textBaseline="middle";
+  x.fillText(d,64,70);
+  return new THREE.CanvasTexture(c);
+}
+const tex0 = makeTex("0");
+const tex1 = makeTex("1");
+
+/* ---------- INSTANCES ---------- */
+const COUNT = 400;
+const geo = new THREE.PlaneGeometry(1,1);
+const mat0 = new THREE.MeshBasicMaterial({ map:tex0, transparent:true, blending:THREE.AdditiveBlending });
+const mat1 = new THREE.MeshBasicMaterial({ map:tex1, transparent:true, blending:THREE.AdditiveBlending });
+
+const mesh0 = new THREE.InstancedMesh(geo,mat0,COUNT);
+const mesh1 = new THREE.InstancedMesh(geo,mat1,COUNT);
+scene.add(mesh0,mesh1);
+
+const dummy = new THREE.Object3D();
+const data = Array.from({length:COUNT},()=>({
+  x:(Math.random()-0.5)*40,
+  y:(Math.random()-0.5)*40,
+  z:(Math.random()-0.5)*40,
+  s:0.3+Math.random()*0.7
+}));
+
+/* ---------- ANIMATE ---------- */
+function animate(){
+  for(let i=0;i<COUNT;i++){
+    const d=data[i];
+    d.y -= 0.2;
+    if(d.y<-25) d.y=25;
+
+    dummy.position.set(d.x,d.y,d.z);
+    dummy.scale.setScalar(d.s);
+    dummy.updateMatrix();
+
+    if(Math.random()>0.5) mesh0.setMatrixAt(i,dummy.matrix);
+    else mesh1.setMatrixAt(i,dummy.matrix);
+  }
+  mesh0.instanceMatrix.needsUpdate=true;
+  mesh1.instanceMatrix.needsUpdate=true;
+
+  composer.render();
+  requestAnimationFrame(animate);
+}
+animate();
+
+/* ---------- RESIZE ---------- */
+addEventListener("resize",()=>{
+  renderer.setSize(innerWidth,innerHeight);
+  composer.setSize(innerWidth,innerHeight);
+  camera.aspect=innerWidth/innerHeight;
+  camera.updateProjectionMatrix();
+});
+</script>
 </body>
 </html>
