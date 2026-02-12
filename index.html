@@ -6,7 +6,7 @@
   <title>Xondon</title>
   <link rel="stylesheet" href="styles.css" />
 
-  <!-- IMPORTANT: This makes "three" and "three/addons/" work on plain GitHub Pages -->
+  <!-- Import map so Three works on plain GitHub Pages -->
   <script type="importmap">
   {
     "imports": {
@@ -16,6 +16,7 @@
   }
   </script>
 </head>
+
 <body>
   <canvas id="c"></canvas>
 
@@ -43,10 +44,10 @@
     </div>
   </div>
 
-  <!-- Creates scroll distance while keeping the canvas fixed -->
+  <!-- scroll space -->
   <div class="scrollSpacer"></div>
 
-  <!-- Cache-buster: bump v= number when testing -->
-  <script type="module" src="script.js?v=7"></script>
+  <!-- Bump v= to force refresh -->
+  <script type="module" src="script.js?v=8"></script>
 </body>
 </html>
