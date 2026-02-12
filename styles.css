@@ -11,14 +11,14 @@ html, body { height:100%; margin:0; background: var(--bg); color:#fff; font-fami
   width: 100%;
   height: 100%;
   display:block;
-  z-index: 0;          /* CHANGED: canvas behind */
+  z-index: 0;
 }
 
 .overlay{
   position: fixed;
   inset: 0;
   pointer-events: none;
-  z-index: 10;         /* CHANGED: overlay above */
+  z-index: 10;
 }
 
 .topbar{
