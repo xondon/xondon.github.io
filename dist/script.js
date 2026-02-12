@@ -2,12 +2,16 @@
 import "./style.css";
 import * as THREE from "three";
 
+import { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer.js";
+import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass.js";
+import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPass.js";
+
 /**
  * TRUE "Matrix movie" trails = glyph streams (bright head + fading tail)
- * NOT motion blur.
+ * + White head glyph + Bloom (glow) postprocess
  *
- * - We render many vertical streams.
- * - Each stream is made of multiple glyph segments behind the head.
+ * - Many vertical streams.
+ * - Each stream has a bright/white "head" glyph and a fading green tail.
  * - Scroll controls speed: fall fast -> slow -> stop -> reverse up
  * - Reveal overlay once reversal starts.
  */
@@ -23,7 +27,7 @@ renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.setSize(window.innerWidth, window.innerHeight, false);
 
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x050605); // slightly off-black helps glow read
+scene.background = new THREE.Color(0x040504); // off-black to help glow read
 
 const camera = new THREE.PerspectiveCamera(
   45,
@@ -33,10 +37,26 @@ const camera = new THREE.PerspectiveCamera(
 );
 camera.position.set(0, 6, 34);
 
-scene.add(new THREE.AmbientLight(0xffffff, 0.35));
+scene.add(new THREE.AmbientLight(0xffffff, 0.25));
 
-// Optional: subtle fog for depth (Matrix vibe)
-scene.fog = new THREE.Fog(0x050605, 25, 90);
+// Depth vibe
+scene.fog = new THREE.Fog(0x040504, 25, 95);
+
+// ---------- Postprocessing: Bloom ----------
+const composer = new EffectComposer(renderer);
+composer.addPass(new RenderPass(scene, camera));
+
+// Bloom params (tweakable):
+// strength: how strong the glow is
+// radius: glow spread
+// threshold: how bright something must be to glow (lower = more glow)
+const bloomPass = new UnrealBloomPass(
+  new THREE.Vector2(window.innerWidth, window.innerHeight),
+  1.15, // strength
+  0.55, // radius
+  0.15  // threshold
+);
+composer.addPass(bloomPass);
 
 // ---------- UI elements ----------
 const revealEl = document.querySelector(".reveal");
@@ -44,7 +64,6 @@ const hintEl = document.querySelector(".scrollHint");
 
 // ---------- Scroll mapping ----------
 let scrollProgress = 0; // 0..1
-
 function updateScrollProgress() {
   const maxScroll = document.documentElement.scrollHeight - window.innerHeight;
   const s = maxScroll <= 0 ? 0 : window.scrollY / maxScroll;
@@ -54,23 +73,12 @@ window.addEventListener("scroll", updateScrollProgress, { passive: true });
 updateScrollProgress();
 
 function speedFromScroll(t) {
-  // Tune these two points to match your “feel”
   const stopPoint = 0.35;
   const flipPoint = 0.55;
 
-  if (t < stopPoint) {
-    // falling speed: 1.0 -> 0.08
-    return THREE.MathUtils.lerp(1.0, 0.08, t / stopPoint);
-  }
-  if (t < flipPoint) {
-    // ease to full stop
-    return THREE.MathUtils.lerp(
-      0.08,
-      0.0,
-      (t - stopPoint) / (flipPoint - stopPoint)
-    );
-  }
-  // reverse upward: 0 -> -1.3
+  if (t < stopPoint) return THREE.MathUtils.lerp(1.0, 0.08, t / stopPoint);
+  if (t < flipPoint)
+    return THREE.MathUtils.lerp(0.08, 0.0, (t - stopPoint) / (flipPoint - stopPoint));
   return THREE.MathUtils.lerp(0.0, -1.3, (t - flipPoint) / (1.0 - flipPoint));
 }
 
@@ -94,7 +102,6 @@ function makeDigitTexture(digit) {
   ctx.shadowColor = "rgba(0, 255, 120, 0.65)";
   ctx.shadowBlur = 22;
 
-  // Digit
   ctx.font = "bold 92px monospace";
   ctx.fillStyle = "rgba(0, 255, 120, 0.98)";
   ctx.fillText(String(digit), size / 2, size / 2 + 4);
@@ -119,42 +126,30 @@ const bounds = {
   yBottom: -38,
 };
 
-// How many streams, and how long each trail is
-const STREAMS = 160;        // number of columns
-const SEGMENTS = 22;        // glyphs per column (tail length)
-const SPACING = 1.15;       // spacing between glyphs in a trail
+const STREAMS = 170;  // columns
+const SEGMENTS = 24;  // trail length
+const SPACING = 1.12; // distance between glyphs
 
-// Total instances per digit mesh
 const INSTANCES_PER_DIGIT = STREAMS * SEGMENTS;
 
-// Plane for each glyph “tile”
 const glyphGeo = new THREE.PlaneGeometry(1, 1);
 
-// Additive blending helps glow pop like Matrix
+// Additive blending makes glow stack nicely
 const baseMatParams = {
   transparent: true,
   depthWrite: false,
   blending: THREE.AdditiveBlending,
 };
 
-// Two instanced meshes: zeros and ones
-const mat0 = new THREE.MeshBasicMaterial({
-  ...baseMatParams,
-  map: tex0,
-  opacity: 1.0,
-});
-const mat1 = new THREE.MeshBasicMaterial({
-  ...baseMatParams,
-  map: tex1,
-  opacity: 1.0,
-});
+const mat0 = new THREE.MeshBasicMaterial({ ...baseMatParams, map: tex0, opacity: 1.0 });
+const mat1 = new THREE.MeshBasicMaterial({ ...baseMatParams, map: tex1, opacity: 1.0 });
 
 const zeros = new THREE.InstancedMesh(glyphGeo, mat0, INSTANCES_PER_DIGIT);
 const ones = new THREE.InstancedMesh(glyphGeo, mat1, INSTANCES_PER_DIGIT);
 zeros.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
 ones.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
 
-// Per-instance color to control brightness (head brighter, tail dimmer)
+// Per-instance color controls brightness/tint
 zeros.instanceColor = new THREE.InstancedBufferAttribute(
   new Float32Array(INSTANCES_PER_DIGIT * 3),
   3
@@ -171,41 +166,35 @@ scene.add(zeros, ones);
 const dummy = new THREE.Object3D();
 
 // ---------- Stream data ----------
-/**
- * Each stream has:
- * - x,z position
- * - headY current position
- * - speed multiplier
- * - scale
- * - slight rotation
- */
 const streams = new Array(STREAMS).fill(0).map(() => ({
   x: rand(-bounds.x, bounds.x),
   z: rand(-bounds.z, bounds.z),
   headY: rand(bounds.yBottom, bounds.yTop),
-  speed: rand(0.7, 1.8),
-  scale: rand(0.38, 0.85),
+  speed: rand(0.7, 1.85),
+  scale: rand(0.38, 0.88),
   rotY: rand(-0.15, 0.15),
-  phase: Math.random() * 1000, // for “digit switching”
+  phase: Math.random() * 1000,
 }));
 
-/**
- * Pre-decide which segment uses 0 vs 1, but we also “flicker” over time.
- * We store a base bit per segment; then change occasionally.
- */
+// Base digits, flicker over time
 const baseBit = new Uint8Array(INSTANCES_PER_DIGIT);
-for (let i = 0; i < INSTANCES_PER_DIGIT; i++) {
-  baseBit[i] = Math.random() < 0.5 ? 0 : 1;
+for (let i = 0; i < INSTANCES_PER_DIGIT; i++) baseBit[i] = Math.random() < 0.5 ? 0 : 1;
+
+// Brightness curve: head bright, tail fades out
+function brightnessForSegment(segIndex) {
+  if (segIndex === 0) return 2.25; // extra bright for bloom
+  const t = segIndex / (SEGMENTS - 1); // 0..1
+  return THREE.MathUtils.lerp(1.25, 0.04, t * t);
 }
 
-// ---------- Brightness curve (head bright, tail fades) ----------
-function brightnessForSegment(segIndex) {
-  // segIndex = 0 is head
-  // Make head extra bright, then exponential-ish falloff
-  if (segIndex === 0) return 1.6;
-  const t = segIndex / (SEGMENTS - 1); // 0..1
-  // Fast fade then long tail
-  return THREE.MathUtils.lerp(1.0, 0.05, t * t);
+// Tint curve: head is near-white, tail is green
+function colorForSegment(segIndex, b) {
+  if (segIndex === 0) {
+    // near-white head with a tiny green tint
+    return { r: 1.25 * b, g: 1.35 * b, bl: 1.25 * b };
+  }
+  // tail: green dominant, with some dim red/blue for glow richness
+  return { r: 0.05 * b, g: 1.0 * b, bl: 0.10 * b };
 }
 
 // ---------- Animation ----------
@@ -225,46 +214,101 @@ function animate(now) {
   hintEl?.classList.toggle("hide", scrollProgress > 0.12);
 
   // Move stream heads
-  const worldSpeed = 16.0; // overall speed multiplier (tune)
+  const worldSpeed = 16.5;
   for (let s = 0; s < STREAMS; s++) {
     const st = streams[s];
     st.headY -= dt * worldSpeed * st.speed * scrollSpeed;
 
     if (scrollSpeed >= 0) {
-      // falling
       if (st.headY < bounds.yBottom - SEGMENTS * SPACING) {
         st.headY = bounds.yTop + rand(0, 10);
       }
     } else {
-      // rising
       if (st.headY > bounds.yTop + SEGMENTS * SPACING) {
         st.headY = bounds.yBottom - rand(0, 10);
       }
     }
   }
 
-  // Update instances:
-  // Each stream contributes SEGMENTS glyph tiles behind its head.
-  // We split instances into two meshes (0 and 1). We decide per segment where it goes.
+  // Build instance lists each frame
   let idx0 = 0;
   let idx1 = 0;
 
-  // Simple “digit flicker”: every stream/segment can flip occasionally
-  // This imitates Matrix glyph changing.
-  const flickerRate = 10.0; // higher = more changes
+  const flickerRate = 10.5;
 
   for (let s = 0; s < STREAMS; s++) {
     const st = streams[s];
 
     for (let seg = 0; seg < SEGMENTS; seg++) {
-      // Segment world position (tail behind head)
       const y = st.headY - seg * SPACING;
 
-      // Only draw within vertical bounds (optional optimization)
       if (y < bounds.yBottom - 6 || y > bounds.yTop + 6) continue;
 
-      // Determine which digit (0/1) for this segment
-      // Base + time flicker
       const globalIndex = s * SEGMENTS + seg;
-      const flicker = Math.sin((time * flickerRate) + st.phase + seg * 0.35) > 0.55;
-      const bit = (baseBit[globalIndex] ^ (fl
+
+      // Flicker: toggles digits
+      const flicker =
+        Math.sin(time * flickerRate + st.phase + seg * 0.35) > 0.55;
+
+      const bit = (baseBit[globalIndex] ^ (flicker ? 1 : 0)) & 1;
+
+      const b = brightnessForSegment(seg);
+      const c = colorForSegment(seg, b);
+
+      dummy.position.set(st.x, y, st.z);
+      dummy.rotation.set(0, st.rotY, 0);
+      dummy.scale.setScalar(st.scale);
+      dummy.updateMatrix();
+
+      if (bit === 0) {
+        if (idx0 < INSTANCES_PER_DIGIT) {
+          zeros.setMatrixAt(idx0, dummy.matrix);
+          zeros.instanceColor.setXYZ(idx0, c.r, c.g, c.bl);
+          idx0++;
+        }
+      } else {
+        if (idx1 < INSTANCES_PER_DIGIT) {
+          ones.setMatrixAt(idx1, dummy.matrix);
+          ones.instanceColor.setXYZ(idx1, c.r, c.g, c.bl);
+          idx1++;
+        }
+      }
+    }
+  }
+
+  zeros.count = idx0;
+  ones.count = idx1;
+
+  zeros.instanceMatrix.needsUpdate = true;
+  ones.instanceMatrix.needsUpdate = true;
+  zeros.instanceColor.needsUpdate = true;
+  ones.instanceColor.needsUpdate = true;
+
+  // Render with bloom
+  composer.render();
+  requestAnimationFrame(animate);
+}
+requestAnimationFrame(animate);
+
+// ---------- Resize ----------
+window.addEventListener("resize", () => {
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.setSize(window.innerWidth, window.innerHeight, false);
+
+  composer.setSize(window.innerWidth, window.innerHeight);
+  bloomPass.setSize(window.innerWidth, window.innerHeight);
+
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+});
+
+// ---------- Reduced motion ----------
+const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)");
+if (reduce?.matches) {
+  revealEl?.classList.add("show");
+  hintEl?.classList.add("hide");
+  // Keep bloom but reduce intensity
+  bloomPass.strength = 0.6;
+  bloomPass.radius = 0.35;
+  bloomPass.threshold = 0.25;
+}
