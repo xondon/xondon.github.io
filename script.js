@@ -8,12 +8,12 @@ try {
     padding:8px 10px; border-radius:8px;
     pointer-events:none;
     transition: opacity 0.6s ease;`;
-  status.textContent = "Loading script.js v16...";
+  status.textContent = "Loading script.js v15...";
   document.body.appendChild(status);
   setTimeout(() => {
     status.style.opacity = "0";
     setTimeout(() => status.remove(), 700);
-  }, 1200);
+  }, 1400);
 
   import("three").then(async (THREE) => {
     const { EffectComposer } = await import("three/addons/postprocessing/EffectComposer.js");
@@ -66,49 +66,25 @@ try {
     window.addEventListener("scroll", updateScrollProgress, { passive: true });
     updateScrollProgress();
 
-    // ---------- Timing / Zones ----------
-    // These zones control the “feel” you described:
-    // fall -> slow -> STOP + linger -> scroll more -> WIPE
-    const SLOW_START = 0.22;
-    const STOP_POINT = 0.46;   // enters full stop
-    const LINGER_END = 0.58;   // still 0 speed through here (more present)
-    const WIPE_POINT = 0.64;   // scroll past this to trigger stream wipe
-    const RESET_POINT = 0.30;  // scroll back up past this to return to rain
-
-    // stream wipe duration
-    const STREAM_BURST_DURATION = 2.0;
-
+    function speedFromScroll(t) {
+      const stopPoint = 0.35;
+      const flipPoint = 0.55;
+      if (t < stopPoint) return THREE.MathUtils.lerp(1.0, 0.10, t / stopPoint);
+      if (t < flipPoint) return THREE.MathUtils.lerp(0.10, 0.0, (t - stopPoint) / (flipPoint - stopPoint));
+      return THREE.MathUtils.lerp(0.0, -1.25, (t - flipPoint) / (1.0 - flipPoint));
+    }
+    function revealFromScroll(t) {
+      return t > 0.62;
+    }
     function smoothstep(edge0, edge1, x) {
       const t = Math.min(Math.max((x - edge0) / (edge1 - edge0), 0), 1);
       return t * t * (3 - 2 * t);
     }
 
-    // speed profile with a stronger linger
-    function speedFromScroll(t) {
-      if (t < SLOW_START) return 1.0;
-
-      // Slow down to 0
-      if (t < STOP_POINT) {
-        const k = smoothstep(SLOW_START, STOP_POINT, t);
-        return THREE.MathUtils.lerp(1.0, 0.0, k);
-      }
-
-      // Linger at 0 for a longer mid region
-      if (t < LINGER_END) return 0.0;
-
-      // After linger, keep near 0 until wipe triggers
-      if (t < WIPE_POINT) {
-        // tiny subtle drift so it feels alive but basically stopped
-        return 0.03;
-      }
-
-      // We won’t use “reverse” speed here; wipe takes over.
-      return 0.0;
-    }
-
     // ---------- Trigger points ----------
-    let mode = "RAIN"; // "RAIN" | "STREAM" | "BLACK"
-    let streamStart = 0;
+    const FLIP_POINT = 0.55;
+    const STREAM_BURST_DURATION = 2.0;
+    const RESET_POINT = 0.42;
 
     // ---------- Glyph set ----------
     const GLYPHS = [
@@ -118,6 +94,7 @@ try {
       "ﾅ","ﾐ","ｻ","ﾗ","ﾄ","ﾘ","ﾇ","ﾍ"
     ];
 
+    // ---------- Texture builder ----------
     function makeGlyphTexture(ch) {
       const size = 256;
       const cnv = document.createElement("canvas");
@@ -158,8 +135,10 @@ try {
       if ("colorSpace" in tex) tex.colorSpace = THREE.SRGBColorSpace;
       return tex;
     }
+
     const glyphTextures = GLYPHS.map(makeGlyphTexture);
 
+    // ---------- Shared geometry/material base ----------
     const baseMat = {
       transparent: true,
       depthWrite: false,
@@ -176,7 +155,7 @@ try {
     const SPAWN = { x: 54, y: 75, zNear: 18, zFar: -105 };
 
     // ============================================================
-    // MODE A: Rain
+    // MODE A: "Rain particles"
     // ============================================================
     const RAIN_COUNT = 1100;
 
@@ -221,10 +200,10 @@ try {
     placeRainOnce();
 
     // ============================================================
-    // MODE B: Stream wipe (columns)
+    // MODE B: "Stream burst erase" (columns of glyphs)
     // ============================================================
-    const STREAM_COLUMNS = 130;
-    const STREAM_SEGMENTS = 26;
+    const STREAM_COLUMNS = 120;
+    const STREAM_SEGMENTS = 22;
     const STREAM_COUNT = STREAM_COLUMNS * STREAM_SEGMENTS;
 
     const streamMeshes = GLYPHS.map((_, i) => {
@@ -232,7 +211,7 @@ try {
         ...baseMat,
         map: glyphTextures[i],
         blending: THREE.AdditiveBlending,
-        opacity: 1.0,
+        opacity: 1.0
       });
       const mesh = new THREE.InstancedMesh(glyphGeo, mat, STREAM_COUNT);
       mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
@@ -252,6 +231,12 @@ try {
 
     const STREAM_SPACING = 1.05;
 
+    // ============================================================
+    // State machine
+    // ============================================================
+    let mode = "RAIN"; // "RAIN" | "STREAM" | "BLACK"
+    let streamStart = 0;
+
     function setMode(next) {
       mode = next;
       const rainVisible = next === "RAIN";
@@ -267,11 +252,11 @@ try {
         for (const m of streamMeshes) m.instanceMatrix.needsUpdate = true;
       }
     }
-
     setMode("RAIN");
 
     // ---------- Animation ----------
     let last = performance.now();
+    let prevScroll = scrollProgress;
 
     function animate(now) {
       const dt = Math.min((now - last) / 1000, 0.033);
@@ -283,41 +268,37 @@ try {
         placeRainOnce();
       }
 
-      // Trigger wipe only AFTER the linger
-      if (mode === "RAIN" && scrollProgress >= WIPE_POINT) {
+      // Detect crossing into reverse and trigger stream burst immediately
+      const crossedFlip = prevScroll < FLIP_POINT && scrollProgress >= FLIP_POINT;
+      prevScroll = scrollProgress;
+
+      if (mode === "RAIN" && crossedFlip) {
         setMode("STREAM");
         streamStart = now;
       }
 
-      // UI:
-      // - In RAIN: hide the name (you want it after wipe), keep hint early
-      // - In STREAM: hide everything
-      // - In BLACK: show name
+      // UI behavior
       if (mode === "RAIN") {
-        revealEl?.classList.remove("show");
+        revealEl?.classList.toggle("show", revealFromScroll(scrollProgress));
         hintEl?.classList.toggle("hide", scrollProgress > 0.12);
-      } else if (mode === "STREAM") {
+      } else {
         revealEl?.classList.remove("show");
-        hintEl?.classList.add("hide");
-      } else if (mode === "BLACK") {
-        revealEl?.classList.add("show");   // CHANGED: name appears after wipe
         hintEl?.classList.add("hide");
       }
 
-      // Glow profile:
-      // Strong dreamy glow at top, slightly tighter by mid, then:
-      // - During STREAM: max glow for erase
-      // - During BLACK: no bloom
-      const tighten = smoothstep(0.08, 0.60, scrollProgress);
-      let strength = THREE.MathUtils.lerp(2.15, 1.05, tighten);
-      let radius = THREE.MathUtils.lerp(0.85, 0.45, tighten);
-      let threshold = THREE.MathUtils.lerp(0.06, 0.30, tighten);
+      // Scroll-driven glow (stronger overall)
+      const tighten = smoothstep(0.05, 0.65, scrollProgress);
+      let strength = THREE.MathUtils.lerp(2.35, 0.95, tighten);
+      let radius = THREE.MathUtils.lerp(0.85, 0.40, tighten);
+      let threshold = THREE.MathUtils.lerp(0.06, 0.33, tighten);
 
+      // Mode overrides
       if (mode === "STREAM") {
         strength = 3.0;
         radius = 1.0;
         threshold = 0.02;
-      } else if (mode === "BLACK") {
+      }
+      if (mode === "BLACK") {
         strength = 0.0;
         radius = 0.0;
         threshold = 1.0;
@@ -337,17 +318,13 @@ try {
 
           d.y -= dt * 18 * d.sp * spd;
 
-          // Wrap only if we are moving meaningfully; in stop zone we keep them “present”
-          if (spd > 0.02) {
+          if (spd >= 0) {
             if (d.y < -SPAWN.y) d.y = SPAWN.y;
-          } else if (spd < -0.02) {
+          } else {
             if (d.y > SPAWN.y) d.y = -SPAWN.y;
           }
 
-          // Flicker slows during linger so it feels “present”
-          const inLinger = scrollProgress >= STOP_POINT && scrollProgress <= LINGER_END;
-          const flickerChance = inLinger ? 0.006 : 0.02;
-          if (Math.random() < flickerChance) d.glyph = Math.floor(Math.random() * GLYPHS.length);
+          if (Math.random() < 0.02) d.glyph = Math.floor(Math.random() * GLYPHS.length);
 
           const gi = d.glyph;
           const idx = counts[gi]++;
@@ -370,19 +347,25 @@ try {
         if (elapsed > STREAM_BURST_DURATION) {
           setMode("BLACK");
         } else {
-          // Fast upward wall of code
-          const streamSpeed = -11.5;
+          // Upward speed for the erase wall (fast)
+          const streamSpeed = -10.0;
 
+          // Move stream heads
           for (let s = 0; s < STREAM_COLUMNS; s++) {
             const st = streams[s];
             st.headY -= dt * 18 * st.speed * streamSpeed;
+
+            // wrap quickly
             if (st.headY > SPAWN.y + STREAM_SEGMENTS * STREAM_SPACING) {
               st.headY = -SPAWN.y - Math.random() * 12;
             }
           }
 
+          // Fill instances per glyph
           const counts = new Array(GLYPHS.length).fill(0);
-          const flickerChance = 0.20;
+
+          // more flicker during burst
+          const flickerChance = 0.18;
 
           for (let s = 0; s < STREAM_COLUMNS; s++) {
             const st = streams[s];
@@ -412,7 +395,6 @@ try {
       }
 
       if (mode === "BLACK") {
-        // Keep blank black background with name visible
         for (const m of rainMeshes) m.count = 0;
         for (const m of streamMeshes) m.count = 0;
       }
