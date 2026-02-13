@@ -1,15 +1,11 @@
 try {
-  // Force “refresh always starts at top”
+  // Always start at top on refresh / back-forward cache
   if ("scrollRestoration" in history) history.scrollRestoration = "manual";
-
   const goTop = () => window.scrollTo(0, 0);
   document.addEventListener("DOMContentLoaded", goTop);
-  window.addEventListener("pageshow", (e) => {
-    // bfcache or normal load
-    goTop();
-  });
+  window.addEventListener("pageshow", goTop);
 
-  // Green status box (auto-hides)
+  // Small green status (auto-hide)
   const status = document.createElement("div");
   status.style.cssText = `
     position:fixed; top:12px; left:12px; z-index:9999;
@@ -18,12 +14,12 @@ try {
     padding:8px 10px; border-radius:8px;
     pointer-events:none;
     transition: opacity 0.6s ease;`;
-  status.textContent = "Loading script.js v31...";
+  status.textContent = "Loading script.js v40...";
   document.body.appendChild(status);
   setTimeout(() => {
     status.style.opacity = "0";
     setTimeout(() => status.remove(), 700);
-  }, 1400);
+  }, 1200);
 
   import("three").then(async (THREE) => {
     const { EffectComposer } = await import("three/addons/postprocessing/EffectComposer.js");
@@ -65,14 +61,14 @@ try {
 
     // ---------- UI ----------
     const revealEl = document.getElementById("reveal");
+    const actionsEl = document.getElementById("actions");
     const hintEl = document.getElementById("hint");
 
     // ---------- Scroll ----------
-    let scrollProgress = 0; // 0..1 physical
-    let tProg = 0;          // 0..1 virtual
+    let scrollProgress = 0; // 0..1
+    let tProg = 0;          // 0..1 (slower early)
 
-    // Slower early scroll feel, always reaches 1.0 at bottom
-    const GAMMA = 1.65;
+    const GAMMA = 1.5; // slightly less “stretched” so there’s room for text/buttons/rush
 
     function readScroll() {
       const doc = document.documentElement;
@@ -94,37 +90,42 @@ try {
       return t * t * (3 - 2 * t);
     }
 
-    // ---------- Speed curve (slow -> near stop -> reverse) ----------
+    // ---------- Speed curve ----------
     function speedFromScroll(t) {
-      const slowStart = 0.22;
-      const stopPoint = 0.62;
-      const flipPoint = 0.78;
+      const slowStart = 0.18;
+      const stopPoint = 0.55;
+      const flipPoint = 0.72;
 
       if (t < slowStart) return 1.0;
 
       if (t < stopPoint) {
         const k = smoothstep(slowStart, stopPoint, t);
-        return THREE.MathUtils.lerp(1.0, 0.06, k);
+        return THREE.MathUtils.lerp(1.0, 0.08, k);
       }
 
       if (t < flipPoint) {
         const k = smoothstep(stopPoint, flipPoint, t);
-        return THREE.MathUtils.lerp(0.06, 0.0, k);
+        return THREE.MathUtils.lerp(0.08, 0.0, k);
       }
 
       return THREE.MathUtils.lerp(0.0, -1.25, smoothstep(flipPoint, 1.0, t));
     }
 
-    // ---------- Rush (no wipe / no blackout) ----------
-    const RUSH_POINT = 0.92;               // virtual trigger
-    const RUSH_DURATION = 2.2;             // seconds
-    const ACTIVATE_PX_FROM_BOTTOM = 12;    // pixel bottom failsafe
+    // ---------- Reveal timing ----------
+    // CHANGED: text shows earlier, buttons show later (both based on virtual progress)
+    const TEXT_POINT = 0.62;
+    const BUTTON_POINT = 0.78;
+
+    // ---------- Rush (optional “energy”) ----------
+    const RUSH_POINT = 0.90;
+    const RUSH_DURATION = 1.8;
+    const ACTIVATE_PX_FROM_BOTTOM = 12;
 
     let rushActive = false;
     let rushDone = false;
     let rushStart = 0;
 
-    // ---------- Glyph set ----------
+    // ---------- Glyphs ----------
     const GLYPHS = [
       "0","1","2","3","4","5","6","7","8","9",
       "@","#","$","%","&","*","+","-","=","/","\\",
@@ -132,7 +133,6 @@ try {
       "ﾅ","ﾐ","ｻ","ﾗ","ﾄ","ﾘ","ﾇ","ﾍ"
     ];
 
-    // ---------- Texture builder ----------
     function makeGlyphTexture(ch) {
       const size = 256;
       const cnv = document.createElement("canvas");
@@ -144,11 +144,11 @@ try {
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
 
-      // emerald glow pass
+      // glow pass
       ctx.save();
       ctx.translate(size / 2, size / 2);
       ctx.font = "900 150px monospace";
-      ctx.shadowColor = "rgba(0,255,120,0.70)";
+      ctx.shadowColor = "rgba(0,255,120,0.7)";
       ctx.shadowBlur = 26;
       ctx.fillStyle = "rgba(0,255,120,0.30)";
       ctx.fillText(ch, 0, 8);
@@ -215,19 +215,28 @@ try {
       const dt = Math.min((now - last) / 1000, 0.033);
       last = now;
 
-      // Read scroll every frame
       scrollInfo = readScroll();
       const atBottomPx = scrollInfo.pxFromBottom <= ACTIVATE_PX_FROM_BOTTOM;
 
-      // Trigger rush
+      // Reveal text + buttons by scroll
+      const showText = tProg >= TEXT_POINT;
+      const showButtons = tProg >= BUTTON_POINT;
+
+      revealEl?.classList.toggle("show", showText);
+      actionsEl?.classList.toggle("show", showButtons);
+
+      // Hint hides after you start scrolling or after text shows
+      hintEl?.classList.toggle("hide", tProg > 0.08 || showText);
+
+      // Trigger rush near end (optional)
       if (!rushActive && !rushDone && (tProg >= RUSH_POINT || atBottomPx)) {
         rushActive = true;
         rushStart = now;
       }
 
-      // Speed + bloom
       let spd = speedFromScroll(tProg);
 
+      // Bloom scales with scroll
       const tighten = smoothstep(0.05, 0.75, tProg);
       let strength = THREE.MathUtils.lerp(2.35, 0.95, tighten);
       let radius = THREE.MathUtils.lerp(0.85, 0.40, tighten);
@@ -237,17 +246,14 @@ try {
         const elapsed = (now - rushStart) / 1000;
         if (elapsed < RUSH_DURATION) {
           spd = -9.0;
-          strength = 3.2;
-          radius = 1.05;
+          strength = 3.0;
+          radius = 1.0;
           threshold = 0.02;
           for (const m of glyphMeshes) m.material.blending = THREE.AdditiveBlending;
         } else {
           rushActive = false;
           rushDone = true;
           for (const m of glyphMeshes) m.material.blending = THREE.NormalBlending;
-
-          // CHANGED: nav appears after reveal
-          document.body.classList.add("state-revealed");
         }
       } else {
         for (const m of glyphMeshes) m.material.blending = THREE.NormalBlending;
@@ -257,13 +263,7 @@ try {
       bloomPass.radius = radius;
       bloomPass.threshold = threshold;
 
-      // UI:
-      hintEl?.classList.toggle("hide", tProg > 0.10 || rushActive);
-
-      if (rushDone) revealEl?.classList.add("show");
-      else revealEl?.classList.remove("show");
-
-      // Instance build
+      // Instances
       const counts = new Array(GLYPHS.length).fill(0);
       const flickerChance = rushActive ? 0.12 : 0.02;
 
