@@ -1,128 +1,68 @@
 <!doctype html>
 <html lang="en">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Matrix Test</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Dominic Donatucci • Deity</title>
 
-<style>
-  html,body { margin:0; height:100%; background:#000; overflow:hidden; }
-  #c { width:100%; height:100%; display:block; }
-  .label {
-    position:fixed; top:10px; left:10px;
-    color:#0f0; font-family:monospace; font-size:14px;
-    background:rgba(0,0,0,0.5); padding:6px 10px; border-radius:6px;
-  }
-</style>
+  <link rel="stylesheet" href="styles.css?v=31" />
 
-<!-- Import map so Three works on plain GitHub Pages -->
-<script type="importmap">
-{
-  "imports": {
-    "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
-    "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+      "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+    }
   }
-}
-</script>
+  </script>
 </head>
 
-<body>
-<canvas id="c"></canvas>
-<div class="label">Matrix Test — If you see green glow, it works</div>
+<body class="home">
+  <!-- Topbar (hidden until state-revealed) -->
+  <header class="topbar">
+    <a class="brand" href="./index.html" aria-label="Deity Home">
+      <span class="brandMark">Ⅾ</span>
+      <span class="brandText">Deity</span>
+    </a>
 
-<script type="module">
-import * as THREE from "three";
-import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
-import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
-import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js";
+    <nav class="nav" aria-label="Primary">
+      <a href="./index.html" aria-current="page">Home</a>
+      <a href="./projects.html">Projects</a>
+      <a href="./resume.html">Resume</a>
+    </nav>
 
-/* ---------- BASIC ---------- */
-const canvas = document.getElementById("c");
-const renderer = new THREE.WebGLRenderer({ canvas, antialias:true });
-renderer.setSize(innerWidth, innerHeight);
-renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+    <a class="cta" href="mailto:you@email.com">Contact</a>
+  </header>
 
-const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x000000);
+  <!-- Three.js canvas -->
+  <canvas id="c"></canvas>
 
-const camera = new THREE.PerspectiveCamera(45, innerWidth/innerHeight, 0.1, 200);
-camera.position.z = 30;
+  <!-- Overlays -->
+  <div class="overlay">
+    <!-- Hero reveal (shows after rush completes) -->
+    <div class="center">
+      <div class="reveal" id="reveal" aria-live="polite">
+        <div class="kicker">DOMINIC DONATUCCI</div>
+        <div class="title">Deity</div>
+        <div class="subline">Classic craft. Modern systems.</div>
 
-/* ---------- BLOOM ---------- */
-const composer = new EffectComposer(renderer);
-composer.addPass(new RenderPass(scene,camera));
+        <div class="heroActions">
+          <a class="btnGhost" href="./projects.html">View Projects</a>
+          <a class="btnGhost" href="./resume.html">View Resume</a>
+        </div>
+      </div>
+    </div>
 
-const bloom = new UnrealBloomPass(
-  new THREE.Vector2(innerWidth,innerHeight),
-  1.6,  // strength
-  0.6,  // radius
-  0.1   // threshold
-);
-composer.addPass(bloom);
+    <!-- Scroll hint (only during intro) -->
+    <div class="scrollHint" id="hint">
+      <div class="mouse"></div>
+      <div class="text">Scroll</div>
+    </div>
+  </div>
 
-/* ---------- DIGIT TEXTURE ---------- */
-function makeTex(d){
-  const c = document.createElement("canvas");
-  c.width = 128; c.height = 128;
-  const x = c.getContext("2d");
-  x.fillStyle="#000"; x.fillRect(0,0,128,128);
-  x.shadowColor="#0f0"; x.shadowBlur=20;
-  x.fillStyle="#0f0";
-  x.font="bold 90px monospace";
-  x.textAlign="center"; x.textBaseline="middle";
-  x.fillText(d,64,70);
-  return new THREE.CanvasTexture(c);
-}
-const tex0 = makeTex("0");
-const tex1 = makeTex("1");
+  <!-- Scroll area (controls the animation) -->
+  <div class="scrollSpacer"></div>
 
-/* ---------- INSTANCES ---------- */
-const COUNT = 400;
-const geo = new THREE.PlaneGeometry(1,1);
-const mat0 = new THREE.MeshBasicMaterial({ map:tex0, transparent:true, blending:THREE.AdditiveBlending });
-const mat1 = new THREE.MeshBasicMaterial({ map:tex1, transparent:true, blending:THREE.AdditiveBlending });
-
-const mesh0 = new THREE.InstancedMesh(geo,mat0,COUNT);
-const mesh1 = new THREE.InstancedMesh(geo,mat1,COUNT);
-scene.add(mesh0,mesh1);
-
-const dummy = new THREE.Object3D();
-const data = Array.from({length:COUNT},()=>({
-  x:(Math.random()-0.5)*40,
-  y:(Math.random()-0.5)*40,
-  z:(Math.random()-0.5)*40,
-  s:0.3+Math.random()*0.7
-}));
-
-/* ---------- ANIMATE ---------- */
-function animate(){
-  for(let i=0;i<COUNT;i++){
-    const d=data[i];
-    d.y -= 0.2;
-    if(d.y<-25) d.y=25;
-
-    dummy.position.set(d.x,d.y,d.z);
-    dummy.scale.setScalar(d.s);
-    dummy.updateMatrix();
-
-    if(Math.random()>0.5) mesh0.setMatrixAt(i,dummy.matrix);
-    else mesh1.setMatrixAt(i,dummy.matrix);
-  }
-  mesh0.instanceMatrix.needsUpdate=true;
-  mesh1.instanceMatrix.needsUpdate=true;
-
-  composer.render();
-  requestAnimationFrame(animate);
-}
-animate();
-
-/* ---------- RESIZE ---------- */
-addEventListener("resize",()=>{
-  renderer.setSize(innerWidth,innerHeight);
-  composer.setSize(innerWidth,innerHeight);
-  camera.aspect=innerWidth/innerHeight;
-  camera.updateProjectionMatrix();
-});
-</script>
+  <script type="module" src="./script.js?v=31"></script>
 </body>
 </html>
