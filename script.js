@@ -1,21 +1,29 @@
 try {
+  // Force “refresh always starts at top”
+  if ("scrollRestoration" in history) history.scrollRestoration = "manual";
+
+  const goTop = () => window.scrollTo(0, 0);
+  document.addEventListener("DOMContentLoaded", goTop);
+  window.addEventListener("pageshow", (e) => {
+    // bfcache or normal load
+    goTop();
+  });
+
   // Green status box (auto-hides)
   const status = document.createElement("div");
   status.style.cssText = `
     position:fixed; top:12px; left:12px; z-index:9999;
-    font: 12px/1.25 monospace; color:#0f0;
-    background: rgba(0,0,0,0.60);
+    font: 12px/1.2 monospace; color:#0f0;
+    background: rgba(0,0,0,0.55);
     padding:8px 10px; border-radius:8px;
     pointer-events:none;
-    white-space:pre;
     transition: opacity 0.6s ease;`;
-  status.textContent = "Loading script.js v22...";
+  status.textContent = "Loading script.js v31...";
   document.body.appendChild(status);
-
-  // fade the “loading” label but keep the box for debug numbers
   setTimeout(() => {
-    status.style.opacity = "0.95";
-  }, 600);
+    status.style.opacity = "0";
+    setTimeout(() => status.remove(), 700);
+  }, 1400);
 
   import("three").then(async (THREE) => {
     const { EffectComposer } = await import("three/addons/postprocessing/EffectComposer.js");
@@ -43,7 +51,7 @@ try {
     scene.add(new THREE.AmbientLight(0xffffff, 0.25));
     scene.fog = new THREE.Fog(0x000000, 25, 120);
 
-    // ---------- Bloom ----------
+    // ---------- Post ----------
     const composer = new EffectComposer(renderer);
     composer.addPass(new RenderPass(scene, camera));
 
@@ -59,30 +67,25 @@ try {
     const revealEl = document.getElementById("reveal");
     const hintEl = document.getElementById("hint");
 
-    // ---------- Scroll control ----------
-    let scrollProgress = 0; // physical 0..1
-    let tProg = 0;          // virtual 0..1
+    // ---------- Scroll ----------
+    let scrollProgress = 0; // 0..1 physical
+    let tProg = 0;          // 0..1 virtual
 
-    // makes it feel “longer” but ALWAYS reaches 1 at the bottom (because it’s just a power curve)
+    // Slower early scroll feel, always reaches 1.0 at bottom
     const GAMMA = 1.65;
-
-    // CHANGED: pixel-based bottom detection (guaranteed)
-    const ACTIVATE_PX_FROM_BOTTOM = 12;
 
     function readScroll() {
       const doc = document.documentElement;
       const maxScroll = Math.max(0, doc.scrollHeight - window.innerHeight);
       const y = window.scrollY || doc.scrollTop || 0;
-      const clampedY = Math.min(Math.max(y, 0), maxScroll);
+      const clamped = Math.min(Math.max(y, 0), maxScroll);
 
-      scrollProgress = maxScroll <= 0 ? 0 : (clampedY / maxScroll);
+      scrollProgress = maxScroll <= 0 ? 0 : (clamped / maxScroll);
       tProg = Math.pow(scrollProgress, GAMMA);
 
-      const pxFromBottom = Math.max(0, maxScroll - clampedY);
-      return { maxScroll, y: clampedY, pxFromBottom };
+      const pxFromBottom = Math.max(0, maxScroll - clamped);
+      return { maxScroll, y: clamped, pxFromBottom };
     }
-
-    // still listen to scroll, but we’ll also read every frame
     window.addEventListener("scroll", readScroll, { passive: true });
     let scrollInfo = readScroll();
 
@@ -112,9 +115,10 @@ try {
       return THREE.MathUtils.lerp(0.0, -1.25, smoothstep(flipPoint, 1.0, t));
     }
 
-    // ---------- Rush (NO wipe / NO blackout) ----------
-    const RUSH_POINT = 0.92;   // virtual progress trigger
-    const RUSH_DURATION = 2.2; // seconds
+    // ---------- Rush (no wipe / no blackout) ----------
+    const RUSH_POINT = 0.92;               // virtual trigger
+    const RUSH_DURATION = 2.2;             // seconds
+    const ACTIVATE_PX_FROM_BOTTOM = 12;    // pixel bottom failsafe
 
     let rushActive = false;
     let rushDone = false;
@@ -140,11 +144,11 @@ try {
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
 
-      // glow pass
+      // emerald glow pass
       ctx.save();
       ctx.translate(size / 2, size / 2);
       ctx.font = "900 150px monospace";
-      ctx.shadowColor = "rgba(0,255,120,0.7)";
+      ctx.shadowColor = "rgba(0,255,120,0.70)";
       ctx.shadowBlur = 26;
       ctx.fillStyle = "rgba(0,255,120,0.30)";
       ctx.fillText(ch, 0, 8);
@@ -172,7 +176,7 @@ try {
 
     const glyphTextures = GLYPHS.map(makeGlyphTexture);
 
-    // ---------- Instanced meshes ----------
+    // ---------- Instancing ----------
     const COUNT = 1100;
     const geo = new THREE.PlaneGeometry(2.10, 2.10);
 
@@ -211,18 +215,17 @@ try {
       const dt = Math.min((now - last) / 1000, 0.033);
       last = now;
 
-      // CHANGED: read scroll EVERY frame (not only on scroll events)
+      // Read scroll every frame
       scrollInfo = readScroll();
-
       const atBottomPx = scrollInfo.pxFromBottom <= ACTIVATE_PX_FROM_BOTTOM;
 
-      // Trigger rush (virtual) OR (pixel-bottom)
+      // Trigger rush
       if (!rushActive && !rushDone && (tProg >= RUSH_POINT || atBottomPx)) {
         rushActive = true;
         rushStart = now;
       }
 
-      // Decide speed & glow
+      // Speed + bloom
       let spd = speedFromScroll(tProg);
 
       const tighten = smoothstep(0.05, 0.75, tProg);
@@ -242,6 +245,9 @@ try {
           rushActive = false;
           rushDone = true;
           for (const m of glyphMeshes) m.material.blending = THREE.NormalBlending;
+
+          // CHANGED: nav appears after reveal
+          document.body.classList.add("state-revealed");
         }
       } else {
         for (const m of glyphMeshes) m.material.blending = THREE.NormalBlending;
@@ -257,7 +263,7 @@ try {
       if (rushDone) revealEl?.classList.add("show");
       else revealEl?.classList.remove("show");
 
-      // Build instances each frame
+      // Instance build
       const counts = new Array(GLYPHS.length).fill(0);
       const flickerChance = rushActive ? 0.12 : 0.02;
 
@@ -288,14 +294,6 @@ try {
         glyphMeshes[g].count = counts[g];
         glyphMeshes[g].instanceMatrix.needsUpdate = true;
       }
-
-      // DEBUG line so we can see why it would ever not trigger
-      status.textContent =
-        `script.js v22\n` +
-        `scrollY=${Math.round(scrollInfo.y)} / max=${Math.round(scrollInfo.maxScroll)}\n` +
-        `pxFromBottom=${Math.round(scrollInfo.pxFromBottom)} (<=${ACTIVATE_PX_FROM_BOTTOM} triggers)\n` +
-        `scrollProgress=${scrollProgress.toFixed(4)}  tProg=${tProg.toFixed(4)}\n` +
-        `rushActive=${rushActive}  rushDone=${rushDone}`;
 
       composer.render();
       requestAnimationFrame(animate);
