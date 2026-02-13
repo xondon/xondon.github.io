@@ -4,73 +4,49 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Projects • Dominic Donatucci</title>
-  <link rel="stylesheet" href="styles.css?v=31" />
+  <link rel="stylesheet" href="styles.css?v=40" />
 </head>
 
-<body class="state-revealed">
-  <header class="topbar">
-    <a class="brand" href="./index.html" aria-label="Deity Home">
-      <span class="brandMark">Ⅾ</span>
-      <span class="brandText">Deity</span>
-    </a>
-
-    <nav class="nav" aria-label="Primary">
-      <a href="./index.html">Home</a>
-      <a href="./projects.html" aria-current="page">Projects</a>
-      <a href="./resume.html">Resume</a>
-    </nav>
-
-    <a class="cta" href="mailto:you@email.com">Contact</a>
-  </header>
+<body>
+  <div class="toplinks">
+    <a href="./index.html">Home</a>
+    <a href="./project.html" aria-current="page">Projects</a>
+    <a href="./resume.html">Resume</a>
+  </div>
 
   <main class="page">
-    <section class="panel">
+    <section class="card">
       <h1 class="h1">Projects</h1>
-      <p class="sub">
-        Selected builds: interactive visuals, web systems, and experiments with polish.
-      </p>
+      <p class="p">Project cards go here. Same visual language as the home reveal.</p>
     </section>
 
-    <section class="grid3">
-      <article class="panel">
-        <div style="font-family:var(--mono); letter-spacing:0.22em; text-transform:uppercase; font-size:12px; color:rgba(214,178,106,0.92);">
-          WebGL • Three.js
-        </div>
-        <h2 style="margin:10px 0 8px; font-family:var(--serif);">Project Name</h2>
-        <p style="margin:0 0 12px; color:var(--muted); line-height:1.55;">
-          One-line description that sells the project and outcome.
-        </p>
-        <div style="display:flex; gap:10px; flex-wrap:wrap;">
-          <a class="btnGhost" href="#" style="border-color: rgba(0,255,120,0.22);">Live</a>
-          <a class="btnGhost" href="#" style="border-color: rgba(214,178,106,0.22);">Code</a>
+    <section class="grid">
+      <article class="card">
+        <div style="font-family:var(--mono); color:rgba(255,255,255,0.65); letter-spacing:0.18em; text-transform:uppercase; font-size:12px;">WebGL</div>
+        <h2 style="margin:10px 0 8px;">Project Name</h2>
+        <p class="p">One-line description. Add links below.</p>
+        <div style="margin-top:12px; display:flex; gap:10px; flex-wrap:wrap;">
+          <a class="btn" href="#" style="pointer-events:auto;">Live</a>
+          <a class="btn" href="#" style="pointer-events:auto;">Code</a>
         </div>
       </article>
 
-      <article class="panel">
-        <div style="font-family:var(--mono); letter-spacing:0.22em; text-transform:uppercase; font-size:12px; color:rgba(214,178,106,0.92);">
-          UI Systems
-        </div>
-        <h2 style="margin:10px 0 8px; font-family:var(--serif);">Project Name</h2>
-        <p style="margin:0 0 12px; color:var(--muted); line-height:1.55;">
-          What it does, what makes it special, why it matters.
-        </p>
-        <div style="display:flex; gap:10px; flex-wrap:wrap;">
-          <a class="btnGhost" href="#" style="border-color: rgba(0,255,120,0.22);">Live</a>
-          <a class="btnGhost" href="#" style="border-color: rgba(214,178,106,0.22);">Case Study</a>
+      <article class="card">
+        <div style="font-family:var(--mono); color:rgba(255,255,255,0.65); letter-spacing:0.18em; text-transform:uppercase; font-size:12px;">UI</div>
+        <h2 style="margin:10px 0 8px;">Project Name</h2>
+        <p class="p">Short description.</p>
+        <div style="margin-top:12px; display:flex; gap:10px; flex-wrap:wrap;">
+          <a class="btn" href="#" style="pointer-events:auto;">Demo</a>
+          <a class="btn" href="#" style="pointer-events:auto;">Notes</a>
         </div>
       </article>
 
-      <article class="panel">
-        <div style="font-family:var(--mono); letter-spacing:0.22em; text-transform:uppercase; font-size:12px; color:rgba(214,178,106,0.92);">
-          Experimental
-        </div>
-        <h2 style="margin:10px 0 8px; font-family:var(--serif);">Project Name</h2>
-        <p style="margin:0 0 12px; color:var(--muted); line-height:1.55;">
-          Short description. Add a visual thumbnail later if you want.
-        </p>
-        <div style="display:flex; gap:10px; flex-wrap:wrap;">
-          <a class="btnGhost" href="#" style="border-color: rgba(0,255,120,0.22);">Demo</a>
-          <a class="btnGhost" href="#" style="border-color: rgba(214,178,106,0.22);">Notes</a>
+      <article class="card">
+        <div style="font-family:var(--mono); color:rgba(255,255,255,0.65); letter-spacing:0.18em; text-transform:uppercase; font-size:12px;">Experimental</div>
+        <h2 style="margin:10px 0 8px;">Project Name</h2>
+        <p class="p">Short description.</p>
+        <div style="margin-top:12px; display:flex; gap:10px; flex-wrap:wrap;">
+          <a class="btn" href="#" style="pointer-events:auto;">View</a>
         </div>
       </article>
     </section>
