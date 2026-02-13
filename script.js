@@ -1,5 +1,5 @@
 try {
-  // Always start at top on refresh / back-forward cache
+  // Always start at top on refresh / bfcache
   if ("scrollRestoration" in history) history.scrollRestoration = "manual";
   const goTop = () => window.scrollTo(0, 0);
   document.addEventListener("DOMContentLoaded", goTop);
@@ -14,7 +14,7 @@ try {
     padding:8px 10px; border-radius:8px;
     pointer-events:none;
     transition: opacity 0.6s ease;`;
-  status.textContent = "Loading script.js v40...";
+  status.textContent = "Loading script.js v41...";
   document.body.appendChild(status);
   setTimeout(() => {
     status.style.opacity = "0";
@@ -64,11 +64,15 @@ try {
     const actionsEl = document.getElementById("actions");
     const hintEl = document.getElementById("hint");
 
+    // Ensure hidden on start (in case of cached DOM state)
+    revealEl?.classList.remove("show");
+    actionsEl?.classList.remove("show");
+
     // ---------- Scroll ----------
     let scrollProgress = 0; // 0..1
     let tProg = 0;          // 0..1 (slower early)
 
-    const GAMMA = 1.5; // slightly less “stretched” so there’s room for text/buttons/rush
+    const GAMMA = 1.5;
 
     function readScroll() {
       const doc = document.documentElement;
@@ -111,19 +115,21 @@ try {
       return THREE.MathUtils.lerp(0.0, -1.25, smoothstep(flipPoint, 1.0, t));
     }
 
-    // ---------- Reveal timing ----------
-    // CHANGED: text shows earlier, buttons show later (both based on virtual progress)
-    const TEXT_POINT = 0.62;
-    const BUTTON_POINT = 0.78;
-
-    // ---------- Rush (optional “energy”) ----------
-    const RUSH_POINT = 0.90;
-    const RUSH_DURATION = 1.8;
-    const ACTIVATE_PX_FROM_BOTTOM = 12;
+    // ---------- Rush (this is the “activation”) ----------
+    const RUSH_POINT = 0.90;             // virtual trigger
+    const RUSH_DURATION = 1.8;           // seconds
+    const ACTIVATE_PX_FROM_BOTTOM = 12;  // pixel failsafe
 
     let rushActive = false;
     let rushDone = false;
     let rushStart = 0;
+
+    // Reveal timing AFTER rush
+    const BUTTON_DELAY_MS = 550;     // buttons appear shortly after box
+    const BUTTON_SCROLL_EXTRA = 0.03; // OR user scrolls a bit more after rush
+
+    let revealTime = 0;
+    let tAtRushDone = 0;
 
     // ---------- Glyphs ----------
     const GLYPHS = [
@@ -218,17 +224,10 @@ try {
       scrollInfo = readScroll();
       const atBottomPx = scrollInfo.pxFromBottom <= ACTIVATE_PX_FROM_BOTTOM;
 
-      // Reveal text + buttons by scroll
-      const showText = tProg >= TEXT_POINT;
-      const showButtons = tProg >= BUTTON_POINT;
+      // Hint hides after you start scrolling, or once rush begins
+      hintEl?.classList.toggle("hide", tProg > 0.08 || rushActive || rushDone);
 
-      revealEl?.classList.toggle("show", showText);
-      actionsEl?.classList.toggle("show", showButtons);
-
-      // Hint hides after you start scrolling or after text shows
-      hintEl?.classList.toggle("hide", tProg > 0.08 || showText);
-
-      // Trigger rush near end (optional)
+      // Trigger rush near end
       if (!rushActive && !rushDone && (tProg >= RUSH_POINT || atBottomPx)) {
         rushActive = true;
         rushStart = now;
@@ -254,9 +253,25 @@ try {
           rushActive = false;
           rushDone = true;
           for (const m of glyphMeshes) m.material.blending = THREE.NormalBlending;
+
+          // mark reveal moment
+          revealTime = now;
+          tAtRushDone = tProg;
         }
       } else {
         for (const m of glyphMeshes) m.material.blending = THREE.NormalBlending;
+      }
+
+      // CHANGED: box only appears after rush finishes
+      revealEl?.classList.toggle("show", rushDone);
+
+      // CHANGED: buttons appear after rush finishes + delay OR a little more scroll
+      if (rushDone) {
+        const timeOk = (now - revealTime) >= BUTTON_DELAY_MS;
+        const scrollOk = (tProg - tAtRushDone) >= BUTTON_SCROLL_EXTRA;
+        actionsEl?.classList.toggle("show", timeOk || scrollOk);
+      } else {
+        actionsEl?.classList.remove("show");
       }
 
       bloomPass.strength = strength;
