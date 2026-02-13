@@ -125,8 +125,8 @@ try {
     let rushStart = 0;
 
     // Reveal timing AFTER rush
-    const BUTTON_DELAY_MS = 550;     // buttons appear shortly after box
-    const BUTTON_SCROLL_EXTRA = 0.03; // OR user scrolls a bit more after rush
+    const BUTTON_DELAY_MS = 0;     // buttons appear shortly after box
+    const BUTTON_SCROLL_EXTRA = 0.0; // OR user scrolls a bit more after rush
 
     let revealTime = 0;
     let tAtRushDone = 0;
