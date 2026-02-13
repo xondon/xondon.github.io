@@ -243,6 +243,28 @@ body::before{
 
   overflow: hidden; /* needed for border light */
 }
+/* Matrix border light sweep */
+.card::after{
+  content: "";
+  position: absolute;
+  inset: -2px;
+  border-radius: 18px;
+  pointer-events: none;
+
+  background: linear-gradient(
+    120deg,
+    transparent 0%,
+    transparent 40%,
+    rgba(0,255,120,0.8) 48%,
+    rgba(180,255,220,0.9) 50%,
+    rgba(0,255,120,0.8) 52%,
+    transparent 60%,
+    transparent 100%
+  );
+
+  opacity: 0;
+  animation: matrixBorderSweep 14s infinite;
+}
 
 .h1{
   margin: 0 0 10px;
