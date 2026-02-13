@@ -231,13 +231,19 @@ body::before{
   color: rgba(255,255,255,0.92);
 }
 .card{
+  position: relative;
   background: rgba(0,0,0,0.35);
-  border: 1px solid rgba(0,255,120,0.16);
+  border: 2px solid rgba(0,255,120,0.35); /* thicker border */
   border-radius: 18px;
   padding: 18px;
   backdrop-filter: blur(10px);
-  box-shadow: 0 18px 45px rgba(0,0,0,0.55);
+  box-shadow:
+    0 18px 45px rgba(0,0,0,0.55),
+    0 0 0 1px rgba(0,255,120,0.08) inset;
+
+  overflow: hidden; /* needed for border light */
 }
+
 .h1{
   margin: 0 0 10px;
   font-size: clamp(28px, 3.2vw, 42px);
