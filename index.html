@@ -3,9 +3,9 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Dominic Donatucci • Deity</title>
+  <title>Dominic Donatucci</title>
 
-  <link rel="stylesheet" href="styles.css?v=31" />
+  <link rel="stylesheet" href="styles.css?v=40" />
 
   <script type="importmap">
   {
@@ -18,51 +18,34 @@
 </head>
 
 <body class="home">
-  <!-- Topbar (hidden until state-revealed) -->
-  <header class="topbar">
-    <a class="brand" href="./index.html" aria-label="Deity Home">
-      <span class="brandMark">Ⅾ</span>
-      <span class="brandText">Deity</span>
-    </a>
-
-    <nav class="nav" aria-label="Primary">
-      <a href="./index.html" aria-current="page">Home</a>
-      <a href="./projects.html">Projects</a>
-      <a href="./resume.html">Resume</a>
-    </nav>
-
-    <a class="cta" href="mailto:you@email.com">Contact</a>
-  </header>
-
-  <!-- Three.js canvas -->
   <canvas id="c"></canvas>
 
-  <!-- Overlays -->
   <div class="overlay">
-    <!-- Hero reveal (shows after rush completes) -->
     <div class="center">
-      <div class="reveal" id="reveal" aria-live="polite">
-        <div class="kicker">DOMINIC DONATUCCI</div>
-        <div class="title">Deity</div>
-        <div class="subline">Classic craft. Modern systems.</div>
+      <div class="reveal" id="reveal">
+        <div class="nameLine">
+          <h1 class="name">Dominic</h1>
+          <span class="surname">Donatucci</span>
+        </div>
+        <div class="brand">Deity</div>
 
-        <div class="heroActions">
-          <a class="btnGhost" href="./projects.html">View Projects</a>
-          <a class="btnGhost" href="./resume.html">View Resume</a>
+        <!-- Buttons start hidden; script reveals them after further scroll -->
+        <div class="actions" id="actions">
+          <a class="btn" href="./resume.html">Resume</a>
+          <a class="btn" href="./project.html">Projects</a>
         </div>
       </div>
     </div>
 
-    <!-- Scroll hint (only during intro) -->
     <div class="scrollHint" id="hint">
       <div class="mouse"></div>
       <div class="text">Scroll</div>
     </div>
   </div>
 
-  <!-- Scroll area (controls the animation) -->
+  <!-- Controls scroll length -->
   <div class="scrollSpacer"></div>
 
-  <script type="module" src="./script.js?v=31"></script>
+  <script type="module" src="./script.js?v=40"></script>
 </body>
 </html>
