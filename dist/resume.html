@@ -1,29 +1,85 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta http-equiv="X-UA-Compatible" content="IE=edge">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="icon" href="./imgs/icon.png">
-    <link rel="stylesheet" href="projectstyles.css">
-    <title>Project</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Resume • Dominic Donatucci</title>
+  <link rel="stylesheet" href="styles.css?v=31" />
 </head>
-<body>
-    <div class="header">
-        <div class="inner-header">
-            <div class="logo">
-                <img class="lg" src="./2.png"  alt="" srcset="">
-            </div>
-            <div class="name">
-                <h1>Dominic</h1><span>Donatucci</span>
-            </div>
-            <ul class="nav">
-                <a href="/index.html"><li>Home</li></a>
-                <a href="/resume.html"><li>Resume</li></a>
-                <a href="/project.html"><li>Projects</li></a>
-                <a href="/about.html"><li>About Me</li></a>
-            </ul>
+
+<body class="state-revealed">
+  <header class="topbar">
+    <a class="brand" href="./index.html" aria-label="Deity Home">
+      <span class="brandMark">Ⅾ</span>
+      <span class="brandText">Deity</span>
+    </a>
+
+    <nav class="nav" aria-label="Primary">
+      <a href="./index.html">Home</a>
+      <a href="./projects.html">Projects</a>
+      <a href="./resume.html" aria-current="page">Resume</a>
+    </nav>
+
+    <a class="cta" href="./Dominic-Donatucci-Resume.pdf" target="_blank" rel="noopener">Download PDF</a>
+  </header>
+
+  <main class="page">
+    <section class="panel">
+      <h1 class="h1">Resume</h1>
+      <p class="sub">
+        A focused snapshot of my work across web experiences, interactive systems, and 3D on the web.
+      </p>
+    </section>
+
+    <section style="margin-top:14px; display:grid; gap:14px; grid-template-columns: 1.25fr 0.75fr;">
+      <div class="panel">
+        <h2 style="margin:0 0 10px; font-family:var(--mono); letter-spacing:0.22em; text-transform:uppercase; font-size:12px; color:rgba(214,178,106,0.92);">
+          Experience
+        </h2>
+
+        <div style="padding:14px 0; border-top:1px solid rgba(255,255,255,0.08);">
+          <div style="display:flex; justify-content:space-between; gap:12px;">
+            <strong>Role Title • Company</strong>
+            <span style="color:var(--muted); font-family:var(--mono); font-size:12px;">2024–Present</span>
+          </div>
+          <ul style="margin:10px 0 0; color:var(--muted); line-height:1.55;">
+            <li>Impact bullet with measurable result.</li>
+            <li>Three.js / WebGL interactive build.</li>
+            <li>Performance + polish focus.</li>
+          </ul>
         </div>
-    </div>
+
+        <div style="padding:14px 0; border-top:1px solid rgba(255,255,255,0.08);">
+          <div style="display:flex; justify-content:space-between; gap:12px;">
+            <strong>Role Title • Company</strong>
+            <span style="color:var(--muted); font-family:var(--mono); font-size:12px;">2022–2024</span>
+          </div>
+          <ul style="margin:10px 0 0; color:var(--muted); line-height:1.55;">
+            <li>Another strong result.</li>
+            <li>Systems thinking + shipping.</li>
+          </ul>
+        </div>
+      </div>
+
+      <aside class="panel">
+        <h2 style="margin:0 0 10px; font-family:var(--mono); letter-spacing:0.22em; text-transform:uppercase; font-size:12px; color:rgba(214,178,106,0.92);">
+          Skills
+        </h2>
+        <p style="margin:0; color:var(--muted); line-height:1.6;">
+          Three.js • WebGL • JavaScript • TypeScript • HTML/CSS<br/>
+          UI Systems • Performance • Animation • Tooling
+        </p>
+
+        <h2 style="margin:18px 0 10px; font-family:var(--mono); letter-spacing:0.22em; text-transform:uppercase; font-size:12px; color:rgba(214,178,106,0.92);">
+          Links
+        </h2>
+        <p style="margin:0; color:var(--muted); line-height:1.7;">
+          <a href="#" style="color:var(--emerald); text-decoration:none;">GitHub</a><br/>
+          <a href="#" style="color:var(--emerald); text-decoration:none;">LinkedIn</a><br/>
+          <a href="mailto:you@email.com" style="color:var(--emerald); text-decoration:none;">Email</a>
+        </p>
+      </aside>
+    </section>
+  </main>
 </body>
 </html>
