@@ -1,66 +1,79 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta http-equiv="X-UA-Compatible" content="IE=edge">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="icon" href="./imgs/icon.png">
-    <link rel="stylesheet" href="projectstyles.css">
-    <title>Project</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Projects • Dominic Donatucci</title>
+  <link rel="stylesheet" href="styles.css?v=31" />
 </head>
-<body>
-    <div class="header">
-        <div class="inner-header">
-            <div class="logo">
-                <img class="lg" src="./2.png"  alt="" srcset="">
-            </div>
-            <div class="name">
-                <h1>Dominic</h1><span>Donatucci</span>
-            </div>
-            <ul class="nav">
-                <a href="/index.html"><li>Home</li></a>
-                <a href="/resume.html"><li>Resume</li></a>
-                <a href="/project.html"><li>Projects</li></a>
-                <a href="/about.html"><li>About Me</li></a>
-            </ul>
+
+<body class="state-revealed">
+  <header class="topbar">
+    <a class="brand" href="./index.html" aria-label="Deity Home">
+      <span class="brandMark">Ⅾ</span>
+      <span class="brandText">Deity</span>
+    </a>
+
+    <nav class="nav" aria-label="Primary">
+      <a href="./index.html">Home</a>
+      <a href="./projects.html" aria-current="page">Projects</a>
+      <a href="./resume.html">Resume</a>
+    </nav>
+
+    <a class="cta" href="mailto:you@email.com">Contact</a>
+  </header>
+
+  <main class="page">
+    <section class="panel">
+      <h1 class="h1">Projects</h1>
+      <p class="sub">
+        Selected builds: interactive visuals, web systems, and experiments with polish.
+      </p>
+    </section>
+
+    <section class="grid3">
+      <article class="panel">
+        <div style="font-family:var(--mono); letter-spacing:0.22em; text-transform:uppercase; font-size:12px; color:rgba(214,178,106,0.92);">
+          WebGL • Three.js
         </div>
-        <section class="projectcontent">
-            <div class="projectfirst">
-                <h1>Projects I have done and what I learned</h1>
-                <a href="#id">Learn More</a>
-                
-            </div>
-            <div id="id" class="projectsecond">
-                <h1>Rubiks Cube Command Line Timer</h1>
-                <img src="rubikstimer.png" alt="">
-                <div class="learn">
-                    <h3>Language Used</h3>
-                    <p>Python 🐍</p>
-                    <h3>What I learned</h3>
-                    <p>Class Notation ( self )</p>
-                    <p>Time ( Python Time Module )</p>
-                    <p>Rich ( Python Command Line Module )</p>
-                    <p>Sqlite3 ( Python small Database Module )</p>
-                    <p>Pynput ( Python Keyboard/Mouse input Module )</p>
-                    <p>Py-To-Exe ( Python Exe Module )</p>
-                    <a href="">Github</a>
-                </div>
-            </div>
-            <div class="projectthird">
-                <h1>3D Dodecahedron Viewer</h1>
-                <img src="https://media2.giphy.com/media/RqS9Vrmf0XVJrtiWgx/giphy.gif?cid=790b7611956c7f69b7e56fcb47c4410afbc4c3fd539b3c3f&rid=giphy.gif&ct=g" alt="">
-                <div class="learn">
-                    <h3>Language Used</h3>
-                    <p>Python 🐍</p>
-                    <h3>What I learned</h3>
-                    <p>OpenGL</p>
-                    <p>Matrixes</p>
-                    <p>Pygame (Camera controls)</p>
-                    <p>Golden ratio</p>
-                    <p>Numpy ( Python Module )</p>
-                    <p>Triangle Based Animation</p>
-                    <a href="">Github</a>
-            </div>
-        </section>
+        <h2 style="margin:10px 0 8px; font-family:var(--serif);">Project Name</h2>
+        <p style="margin:0 0 12px; color:var(--muted); line-height:1.55;">
+          One-line description that sells the project and outcome.
+        </p>
+        <div style="display:flex; gap:10px; flex-wrap:wrap;">
+          <a class="btnGhost" href="#" style="border-color: rgba(0,255,120,0.22);">Live</a>
+          <a class="btnGhost" href="#" style="border-color: rgba(214,178,106,0.22);">Code</a>
+        </div>
+      </article>
+
+      <article class="panel">
+        <div style="font-family:var(--mono); letter-spacing:0.22em; text-transform:uppercase; font-size:12px; color:rgba(214,178,106,0.92);">
+          UI Systems
+        </div>
+        <h2 style="margin:10px 0 8px; font-family:var(--serif);">Project Name</h2>
+        <p style="margin:0 0 12px; color:var(--muted); line-height:1.55;">
+          What it does, what makes it special, why it matters.
+        </p>
+        <div style="display:flex; gap:10px; flex-wrap:wrap;">
+          <a class="btnGhost" href="#" style="border-color: rgba(0,255,120,0.22);">Live</a>
+          <a class="btnGhost" href="#" style="border-color: rgba(214,178,106,0.22);">Case Study</a>
+        </div>
+      </article>
+
+      <article class="panel">
+        <div style="font-family:var(--mono); letter-spacing:0.22em; text-transform:uppercase; font-size:12px; color:rgba(214,178,106,0.92);">
+          Experimental
+        </div>
+        <h2 style="margin:10px 0 8px; font-family:var(--serif);">Project Name</h2>
+        <p style="margin:0 0 12px; color:var(--muted); line-height:1.55;">
+          Short description. Add a visual thumbnail later if you want.
+        </p>
+        <div style="display:flex; gap:10px; flex-wrap:wrap;">
+          <a class="btnGhost" href="#" style="border-color: rgba(0,255,120,0.22);">Demo</a>
+          <a class="btnGhost" href="#" style="border-color: rgba(214,178,106,0.22);">Notes</a>
+        </div>
+      </article>
+    </section>
+  </main>
 </body>
 </html>
