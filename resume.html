@@ -4,79 +4,37 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Resume • Dominic Donatucci</title>
-  <link rel="stylesheet" href="styles.css?v=31" />
+  <link rel="stylesheet" href="styles.css?v=40" />
 </head>
 
-<body class="state-revealed">
-  <header class="topbar">
-    <a class="brand" href="./index.html" aria-label="Deity Home">
-      <span class="brandMark">Ⅾ</span>
-      <span class="brandText">Deity</span>
-    </a>
-
-    <nav class="nav" aria-label="Primary">
-      <a href="./index.html">Home</a>
-      <a href="./projects.html">Projects</a>
-      <a href="./resume.html" aria-current="page">Resume</a>
-    </nav>
-
-    <a class="cta" href="./Dominic-Donatucci-Resume.pdf" target="_blank" rel="noopener">Download PDF</a>
-  </header>
+<body>
+  <div class="toplinks">
+    <a href="./index.html">Home</a>
+    <a href="./project.html">Projects</a>
+    <a href="./resume.html" aria-current="page">Resume</a>
+  </div>
 
   <main class="page">
-    <section class="panel">
+    <section class="card">
       <h1 class="h1">Resume</h1>
-      <p class="sub">
-        A focused snapshot of my work across web experiences, interactive systems, and 3D on the web.
-      </p>
+      <p class="p">Add your real resume content here (or embed a PDF). This page matches the same background + glow language.</p>
     </section>
 
-    <section style="margin-top:14px; display:grid; gap:14px; grid-template-columns: 1.25fr 0.75fr;">
-      <div class="panel">
-        <h2 style="margin:0 0 10px; font-family:var(--mono); letter-spacing:0.22em; text-transform:uppercase; font-size:12px; color:rgba(214,178,106,0.92);">
-          Experience
-        </h2>
-
-        <div style="padding:14px 0; border-top:1px solid rgba(255,255,255,0.08);">
-          <div style="display:flex; justify-content:space-between; gap:12px;">
-            <strong>Role Title • Company</strong>
-            <span style="color:var(--muted); font-family:var(--mono); font-size:12px;">2024–Present</span>
-          </div>
-          <ul style="margin:10px 0 0; color:var(--muted); line-height:1.55;">
-            <li>Impact bullet with measurable result.</li>
-            <li>Three.js / WebGL interactive build.</li>
-            <li>Performance + polish focus.</li>
-          </ul>
-        </div>
-
-        <div style="padding:14px 0; border-top:1px solid rgba(255,255,255,0.08);">
-          <div style="display:flex; justify-content:space-between; gap:12px;">
-            <strong>Role Title • Company</strong>
-            <span style="color:var(--muted); font-family:var(--mono); font-size:12px;">2022–2024</span>
-          </div>
-          <ul style="margin:10px 0 0; color:var(--muted); line-height:1.55;">
-            <li>Another strong result.</li>
-            <li>Systems thinking + shipping.</li>
-          </ul>
+    <section style="margin-top:14px; display:grid; gap:14px; grid-template-columns: 1.2fr 0.8fr;">
+      <div class="card">
+        <h2 style="margin:0 0 10px; font-family:var(--mono); color:var(--green); letter-spacing:0.18em; text-transform:uppercase; font-size:12px;">Experience</h2>
+        <div style="border-top:1px solid rgba(255,255,255,0.08); padding-top:12px;">
+          <strong>Role • Company</strong>
+          <div style="color:rgba(255,255,255,0.65); margin-top:6px;">Impact bullet • Stack bullet • Result bullet</div>
         </div>
       </div>
 
-      <aside class="panel">
-        <h2 style="margin:0 0 10px; font-family:var(--mono); letter-spacing:0.22em; text-transform:uppercase; font-size:12px; color:rgba(214,178,106,0.92);">
-          Skills
-        </h2>
-        <p style="margin:0; color:var(--muted); line-height:1.6;">
-          Three.js • WebGL • JavaScript • TypeScript • HTML/CSS<br/>
-          UI Systems • Performance • Animation • Tooling
-        </p>
-
-        <h2 style="margin:18px 0 10px; font-family:var(--mono); letter-spacing:0.22em; text-transform:uppercase; font-size:12px; color:rgba(214,178,106,0.92);">
-          Links
-        </h2>
-        <p style="margin:0; color:var(--muted); line-height:1.7;">
-          <a href="#" style="color:var(--emerald); text-decoration:none;">GitHub</a><br/>
-          <a href="#" style="color:var(--emerald); text-decoration:none;">LinkedIn</a><br/>
-          <a href="mailto:you@email.com" style="color:var(--emerald); text-decoration:none;">Email</a>
+      <aside class="card">
+        <h2 style="margin:0 0 10px; font-family:var(--mono); color:var(--green); letter-spacing:0.18em; text-transform:uppercase; font-size:12px;">Links</h2>
+        <p class="p" style="line-height:1.9;">
+          <a href="#" style="color:var(--green); text-decoration:none;">GitHub</a><br/>
+          <a href="#" style="color:var(--green); text-decoration:none;">LinkedIn</a><br/>
+          <a href="mailto:you@email.com" style="color:var(--green); text-decoration:none;">Email</a>
         </p>
       </aside>
     </section>
